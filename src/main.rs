@@ -1,24 +1,12 @@
-pub mod config;
+mod config;
+mod message;
 
 use std::sync::mpsc::{self, RecvError};
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
 
 use config::Config;
-
-type ServerId = usize;
-
-#[derive(Debug)]
-enum MessageContent<'a> {
-    Vote(ServerId),
-    Data(&'a str),
-}
-
-#[derive(Debug)]
-struct Message<'a> {
-    content: MessageContent<'a>,
-    to: ServerId,
-}
+use message::{Message, MessageContent};
 
 const CONFIG_STR: &'static str = include_str!("../config/config.ron");
 
