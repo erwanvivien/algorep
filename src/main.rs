@@ -1,5 +1,6 @@
 mod config;
 mod message;
+mod server;
 
 use std::sync::mpsc::{self, RecvError};
 use std::sync::mpsc::{Receiver, Sender};
@@ -7,6 +8,7 @@ use std::thread;
 
 use config::Config;
 use message::{Message, MessageContent};
+use server::Server;
 
 const CONFIG_STR: &'static str = include_str!("../config/config.ron");
 
@@ -29,7 +31,7 @@ fn main() {
             thread_tx.send(message).unwrap();
         });
 
-        threads.push(child);
+        threads.push(Server { thread: child, id });
     }
 
     // Here, all the messages are collected

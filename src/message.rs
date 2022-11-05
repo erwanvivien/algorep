@@ -1,4 +1,4 @@
-pub type ServerId = usize;
+use crate::server::ServerId;
 
 #[derive(Debug)]
 pub enum MessageContent<'a> {
