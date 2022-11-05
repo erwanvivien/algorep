@@ -1,4 +1,4 @@
 Config(
     servers: 5,
-    election_timeout: (2, 5)
+    election_timeout: (Second(2), Second(5))
 )
