@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone, Copy)]
 pub enum ConfigTime {
     Second(u64),
     Millisecond(u64),
@@ -12,7 +12,6 @@ pub enum ConfigTime {
 }
 
 impl ConfigTime {
-    #[allow(dead_code)]
     fn to_duration(self) -> Duration {
         match self {
             Self::Second(n) => Duration::from_secs(n),
@@ -21,6 +20,12 @@ impl ConfigTime {
             Self::Nanosecond(n) => Duration::from_nanos(n),
             Self::Minute(n) => Duration::from_secs(n * 60),
         }
+    }
+}
+
+impl Into<Duration> for ConfigTime {
+    fn into(self) -> Duration {
+        self.to_duration()
     }
 }
 

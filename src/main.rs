@@ -3,18 +3,20 @@ mod message;
 mod node;
 
 use std::collections::VecDeque;
-use std::sync::mpsc::{self, RecvError};
+use std::sync::mpsc;
 use std::thread;
 
 use config::Config;
-use message::{Message, MessageContent};
+use message::Message;
 use node::Node;
 
-const CONFIG_STR: &'static str = include_str!("../config/config.ron");
+use once_cell::sync::Lazy;
+
+pub static CONFIG: Lazy<Config> =
+    Lazy::new(|| ron::from_str(include_str!("../config/config.ron")).expect("Invalid config file"));
 
 fn main() {
-    let config: Config = ron::from_str(CONFIG_STR).expect("");
-    let Config { servers, .. } = config;
+    let Config { servers, .. } = *CONFIG;
 
     let mut threads = Vec::with_capacity(servers);
     let mut senders = Vec::with_capacity(servers);
