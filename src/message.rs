@@ -1,13 +1,13 @@
 use crate::server::ServerId;
 
-#[derive(Debug)]
-pub enum MessageContent<'a> {
+#[derive(Debug, PartialEq, PartialOrd, Eq, Ord)]
+pub enum MessageContent {
     Vote(ServerId),
-    Data(&'a str),
+    Data(String),
 }
 
 #[derive(Debug)]
-pub struct Message<'a> {
-    pub content: MessageContent<'a>,
-    pub to: ServerId,
+pub struct Message {
+    pub content: MessageContent,
+    pub from: ServerId,
 }

@@ -2,13 +2,12 @@ mod config;
 mod message;
 mod server;
 
+use std::collections::VecDeque;
 use std::sync::mpsc::{self, RecvError};
-use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
 
 use config::Config;
 use message::{Message, MessageContent};
-use server::Server;
 
 const CONFIG_STR: &'static str = include_str!("../config/config.ron");
 
@@ -16,30 +15,47 @@ fn main() {
     let config: Config = ron::from_str(CONFIG_STR).expect("");
     let Config { servers, .. } = config;
 
-    let (tx, rx): (Sender<Message>, Receiver<Message>) = mpsc::channel();
     let mut threads = Vec::with_capacity(servers);
+    let mut senders = Vec::with_capacity(servers);
+    let mut receivers = VecDeque::with_capacity(servers);
+
+    for _ in 0..servers {
+        let (sender, receiver) = mpsc::channel::<Message>();
+
+        senders.push(sender);
+        receivers.push_back(receiver);
+    }
 
     for id in 0..servers {
         // The sender endpoint can be copied
-        let thread_tx = tx.clone();
+        let receiver = receivers.pop_front().unwrap();
+        let senders = senders.clone();
 
         let child = thread::spawn(move || {
-            let message = Message {
-                content: MessageContent::Vote(0),
-                to: id,
-            };
-            thread_tx.send(message).unwrap();
+            for send in senders {
+                send.send(Message {
+                    content: MessageContent::Vote(id),
+                    from: id,
+                })
+                .unwrap();
+            }
+
+            loop {
+                match receiver.recv() {
+                    Ok(message) => {
+                        println!("Server {} received {:?}", id, message);
+                    }
+                    Err(RecvError) => {
+                        println!("Server {} received error", id);
+                    }
+                }
+            }
         });
 
-        threads.push(Server { thread: child, id });
+        threads.push(child);
     }
 
-    // Here, all the messages are collected
-    loop {
-        let content = rx.recv();
-        match content {
-            Ok(data) => println!("{:?}", data),
-            Err(RecvError) => (),
-        }
+    for thread in threads {
+        thread.join().unwrap();
     }
 }
