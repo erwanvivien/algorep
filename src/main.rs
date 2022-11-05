@@ -21,13 +21,10 @@ fn main() {
         // The sender endpoint can be copied
         let thread_tx = tx.clone();
 
-        // Each thread will send its id via the channel
         let child = thread::spawn(move || {
-            // The thread takes ownership over `thread_tx`
-            // Each thread queues a message in the channel
             let message = Message {
                 content: MessageContent::Vote(0),
-                to: (id + 1) % servers,
+                to: id,
             };
             thread_tx.send(message).unwrap();
         });
