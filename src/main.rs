@@ -1,6 +1,6 @@
 mod config;
 mod message;
-mod server;
+mod node;
 
 use std::collections::VecDeque;
 use std::sync::mpsc::{self, RecvError};
@@ -8,6 +8,7 @@ use std::thread;
 
 use config::Config;
 use message::{Message, MessageContent};
+use node::Node;
 
 const CONFIG_STR: &'static str = include_str!("../config/config.ron");
 
@@ -32,24 +33,8 @@ fn main() {
         let senders = senders.clone();
 
         let child = thread::spawn(move || {
-            for send in senders {
-                send.send(Message {
-                    content: MessageContent::Vote(id),
-                    from: id,
-                })
-                .unwrap();
-            }
-
-            loop {
-                match receiver.recv() {
-                    Ok(message) => {
-                        println!("Server {} received {:?}", id, message);
-                    }
-                    Err(RecvError) => {
-                        println!("Server {} received error", id);
-                    }
-                }
-            }
+            let node = Node::new(id, receiver, senders);
+            node.run();
         });
 
         threads.push(child);

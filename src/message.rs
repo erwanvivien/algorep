@@ -1,13 +1,14 @@
-use crate::server::ServerId;
+use crate::node::NodeId;
 
-#[derive(Debug, PartialEq, PartialOrd, Eq, Ord)]
+#[allow(dead_code)]
+#[derive(Debug, PartialEq, PartialOrd, Eq, Ord, Clone)]
 pub enum MessageContent {
-    Vote(ServerId),
+    Vote(NodeId),
     Data(String),
 }
 
 #[derive(Debug)]
 pub struct Message {
     pub content: MessageContent,
-    pub from: ServerId,
+    pub from: NodeId,
 }
