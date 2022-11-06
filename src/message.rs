@@ -3,6 +3,7 @@ use crate::node::NodeId;
 #[allow(dead_code)]
 #[derive(Debug, PartialEq, PartialOrd, Eq, Ord, Clone)]
 pub enum MessageContent {
+    RequestVote,
     Vote(NodeId),
     Data(String),
 }

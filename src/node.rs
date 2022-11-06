@@ -35,22 +35,6 @@ impl Node {
         }
     }
 
-    fn broadcast(&self, content: MessageContent) {
-        for (i, sender) in self.senders.iter().enumerate() {
-            if i == self.id {
-                continue;
-            }
-
-            let res = sender.send(Message {
-                content: content.clone(),
-                from: self.id,
-            });
-            if let Err(err) = res {
-                dbg!(err);
-            }
-        }
-    }
-
     pub fn run(&self) {
         self.broadcast(MessageContent::Vote(self.id));
 
@@ -71,6 +55,37 @@ impl Node {
 
                     // Don't know (yet?)
                 }
+            }
+        }
+    }
+
+    fn request_vote(&self) {
+        self.broadcast(MessageContent::RequestVote);
+    }
+
+    fn emit(&self, content: MessageContent) {
+        let res = self.senders[self.id].send(Message {
+            content,
+            from: self.id,
+        });
+
+        if let Err(err) = res {
+            dbg!(err);
+        }
+    }
+
+    fn broadcast(&self, content: MessageContent) {
+        for (i, sender) in self.senders.iter().enumerate() {
+            if i == self.id {
+                continue;
+            }
+
+            let res = sender.send(Message {
+                content: content.clone(),
+                from: self.id,
+            });
+            if let Err(err) = res {
+                dbg!(err);
             }
         }
     }

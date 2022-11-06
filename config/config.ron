@@ -1,4 +1,4 @@
 Config (
-    servers: 5,
+    node_count: 5,
     election_timeout: (Second(2), Second(5))
 )

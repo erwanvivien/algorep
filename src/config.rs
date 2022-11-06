@@ -31,6 +31,6 @@ impl Into<Duration> for ConfigTime {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Config {
-    pub servers: usize,
+    pub node_count: usize,
     pub election_timeout: (ConfigTime, ConfigTime),
 }
