@@ -3,8 +3,9 @@ use crate::node::NodeId;
 #[allow(dead_code)]
 #[derive(Debug, PartialEq, PartialOrd, Eq, Ord, Clone)]
 pub enum MessageContent {
-    RequestVote,
-    Vote(NodeId),
+    VoteRequest,
+    VoteResponse(bool),
+    Heartbeat,
     Data(String),
 }
 
@@ -12,4 +13,5 @@ pub enum MessageContent {
 pub struct Message {
     pub content: MessageContent,
     pub from: NodeId,
+    pub term: usize,
 }

@@ -1,4 +1,4 @@
 Config (
     node_count: 5,
-    election_timeout: (Second(2), Second(5))
+    election_timeout: (Millisecond(1500), Millisecond(3000))
 )

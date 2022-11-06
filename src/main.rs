@@ -35,7 +35,7 @@ fn main() {
         let senders = senders.clone();
 
         let child = thread::spawn(move || {
-            let node = Node::new(id, receiver, senders);
+            let mut node = Node::new(id, receiver, senders);
             node.run();
         });
 
