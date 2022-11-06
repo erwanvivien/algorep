@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, Serialize, Clone, Copy)]
@@ -34,3 +35,15 @@ pub struct Config {
     pub node_count: usize,
     pub election_timeout: (ConfigTime, ConfigTime),
 }
+
+impl Config {
+    pub fn election_timeout_range(&self) -> (Duration, Duration) {
+        (
+            self.election_timeout.0.into(),
+            self.election_timeout.1.into(),
+        )
+    }
+}
+
+pub static CONFIG: Lazy<Config> =
+    Lazy::new(|| ron::from_str(include_str!("../config/config.ron")).expect("Invalid config file"));

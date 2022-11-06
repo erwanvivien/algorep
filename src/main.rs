@@ -2,18 +2,17 @@ mod config;
 mod message;
 mod node;
 
+#[cfg(test)]
+mod tests;
+
 use std::collections::VecDeque;
 use std::sync::mpsc;
 use std::thread;
 
-use config::Config;
+use config::CONFIG;
 use message::Message;
 use node::Node;
 
-use once_cell::sync::Lazy;
-
-pub static CONFIG: Lazy<Config> =
-    Lazy::new(|| ron::from_str(include_str!("../config/config.ron")).expect("Invalid config file"));
 
 fn main() {
     let node_count = CONFIG.node_count;

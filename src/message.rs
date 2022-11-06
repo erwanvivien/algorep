@@ -1,12 +1,23 @@
 use crate::node::NodeId;
 
 #[allow(dead_code)]
-#[derive(Debug, PartialEq, PartialOrd, Eq, Ord, Clone)]
+#[derive(Debug, PartialEq, PartialOrd, Clone)]
+pub enum ReplAction {
+    Speed(f32),
+    Crash,
+    Start,
+    Shutdown,
+}
+
+#[derive(Debug, PartialEq, PartialOrd, Clone)]
 pub enum MessageContent {
     VoteRequest,
     VoteResponse(bool),
     Heartbeat,
-    Data(String),
+
+    // External action
+    #[allow(dead_code)]
+    Repl(ReplAction),
 }
 
 #[derive(Debug)]

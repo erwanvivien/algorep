@@ -4,7 +4,7 @@ use std::{
 };
 
 use crate::{
-    message::{Message, MessageContent},
+    message::{Message, MessageContent, ReplAction},
     CONFIG,
 };
 
@@ -27,8 +27,10 @@ pub struct Node {
     current_term: usize,
     voted_for: NodeId,
 
-    candidate_votes: usize,
     // Volatile state (for all servers)
+    candidate_votes: usize,
+    shutdown_requested: bool,
+    pub(crate) election_timeout_range: (Duration, Duration),
 }
 
 impl Node {
@@ -42,11 +44,17 @@ impl Node {
             // Will never be used at init
             voted_for: id,
             candidate_votes: 0,
+            shutdown_requested: false,
+            election_timeout_range: CONFIG.election_timeout_range(),
         }
     }
 
     pub fn run(&mut self) {
         loop {
+            if self.shutdown_requested {
+                break;
+            }
+
             let timeout = self.generate_timeout();
 
             match self.receiver.recv_timeout(timeout) {
@@ -74,11 +82,15 @@ impl Node {
     }
 
     fn generate_timeout(&self) -> Duration {
-        let (min, max) = CONFIG.election_timeout;
-        let (min, max): (Duration, Duration) = (min.into(), max.into());
+        let (min, max) = self.election_timeout_range;
 
         if self.role == Role::Leader {
             return min / 2;
+        }
+
+        if max == min {
+            // This should never happen (bad config)
+            return min;
         }
 
         let timeout =
@@ -122,6 +134,15 @@ impl Node {
                     self.role = Role::Follower;
                 }
             }
+            MessageContent::Repl(action) => match action {
+                ReplAction::Shutdown => {
+                    self.shutdown_requested = true;
+                }
+                // ReplAction::SetTimeout(timeout) => {
+                //     self.election_timeout_range = (timeout, timeout);
+                // }
+                _ => {}
+            },
             _ => (),
         }
     }
