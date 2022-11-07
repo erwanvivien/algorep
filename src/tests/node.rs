@@ -132,3 +132,21 @@ pub fn should_retry_election() {
 
     shutdown(senders, threads)
 }
+
+#[test]
+pub fn should_elect_first() {
+    let (threads, senders, receiver) = setup_serv(
+        2,
+        Some(vec![Duration::from_millis(10), Duration::from_millis(100)]),
+    );
+
+    let message = receiver.recv().unwrap();
+    assert_eq!(message.content, MessageContent::VoteRequest);
+
+    let message = receiver.recv().unwrap();
+    assert_eq!(message.content, MessageContent::Heartbeat);
+
+    assert_eq!(message.term, 1);
+
+    shutdown(senders, threads)
+}
