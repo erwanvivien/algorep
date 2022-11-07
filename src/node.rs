@@ -132,6 +132,9 @@ impl Node {
                 if term >= self.current_term {
                     self.current_term = term;
                     self.role = Role::Follower;
+                    self.emit(from, MessageContent::AppendResponse(true))
+                } else {
+                    self.emit(from, MessageContent::AppendResponse(false))
                 }
             }
             MessageContent::Repl(action) => match action {

@@ -13,6 +13,9 @@ pub enum ReplAction {
 pub enum MessageContent {
     VoteRequest,
     VoteResponse(bool),
+    // Log replication
+    AppendResponse(bool),
+
     Heartbeat,
 
     // External action
