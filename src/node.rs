@@ -129,13 +129,12 @@ impl Node {
                 }
             }
             MessageContent::Heartbeat => {
-                if term >= self.current_term {
+                let accept = term >= self.current_term;
+                if accept {
                     self.current_term = term;
                     self.role = Role::Follower;
-                    self.emit(from, MessageContent::AppendResponse(true))
-                } else {
-                    self.emit(from, MessageContent::AppendResponse(false))
                 }
+                self.emit(from, MessageContent::AppendResponse(accept))
             }
             MessageContent::Repl(action) => match action {
                 ReplAction::Shutdown => {
