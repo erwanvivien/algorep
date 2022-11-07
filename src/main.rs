@@ -7,14 +7,14 @@ mod node;
 mod tests;
 
 use std::collections::VecDeque;
-use std::sync::mpsc;
-use std::thread;
+use tokio::sync::mpsc;
 
 use config::CONFIG;
 use message::Message;
 use node::Node;
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let node_count = CONFIG.node_count;
 
     let mut threads = Vec::with_capacity(node_count);
@@ -22,7 +22,7 @@ fn main() {
     let mut receivers = VecDeque::with_capacity(node_count);
 
     for _ in 0..node_count {
-        let (sender, receiver) = mpsc::channel::<Message>();
+        let (sender, receiver) = mpsc::channel::<Message>(4096);
 
         senders.push(sender);
         receivers.push_back(receiver);
@@ -33,15 +33,15 @@ fn main() {
         let receiver = receivers.pop_front().unwrap();
         let senders = senders.clone();
 
-        let child = thread::spawn(move || {
+        let child = tokio::spawn(async move {
             let mut node = Node::new(id, receiver, senders);
-            node.run();
+            node.run().await;
         });
 
         threads.push(child);
     }
 
-    for thread in threads {
-        thread.join().unwrap();
+    for thread in threads.into_iter() {
+        let _ = thread.await;
     }
 }

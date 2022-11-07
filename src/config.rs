@@ -34,6 +34,8 @@ impl Into<Duration> for ConfigTime {
 pub struct Config {
     pub node_count: usize,
     pub election_timeout: (ConfigTime, ConfigTime),
+
+    pub channel_capacity: usize,
 }
 
 impl Config {

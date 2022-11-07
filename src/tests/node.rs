@@ -1,5 +1,5 @@
-use std::sync::mpsc::{self, Receiver, Sender};
-use std::thread::{self, JoinHandle};
+use tokio::sync::mpsc::{self, Receiver, Sender};
+use tokio::task::JoinHandle;
 
 use std::collections::VecDeque;
 use std::time::Duration;
@@ -7,7 +7,7 @@ use std::time::Duration;
 use crate::message::{Message, MessageContent, ReplAction::*};
 use crate::node::Node;
 
-fn setup_serv(
+async fn setup_serv(
     count: usize,
     timeouts: Option<Vec<Duration>>,
 ) -> (Vec<JoinHandle<()>>, Vec<Sender<Message>>, Receiver<Message>) {
@@ -20,7 +20,7 @@ fn setup_serv(
     let mut receivers = VecDeque::with_capacity(count + 1);
 
     for _ in 0..count + 1 {
-        let (sender, receiver) = mpsc::channel::<Message>();
+        let (sender, receiver) = mpsc::channel::<Message>(4096);
 
         senders.push(sender);
         receivers.push_back(receiver);
@@ -33,12 +33,12 @@ fn setup_serv(
 
         let timeouts = timeouts.clone();
 
-        let child = thread::spawn(move || {
+        let child = tokio::spawn(async move {
             let mut node = Node::new(id, receiver, senders);
             if let Some(durations) = timeouts {
                 node.election_timeout_range = (durations[id], durations[id]);
             }
-            node.run();
+            node.run().await;
         });
 
         threads.push(child);
@@ -47,7 +47,7 @@ fn setup_serv(
     return (threads, senders, receivers.pop_front().unwrap());
 }
 
-fn shutdown(senders: Vec<Sender<Message>>, threads: Vec<JoinHandle<()>>) {
+async fn shutdown(senders: Vec<Sender<Message>>, threads: Vec<JoinHandle<()>>) {
     for sender in senders {
         let _ = sender
             .send(Message {
@@ -55,17 +55,18 @@ fn shutdown(senders: Vec<Sender<Message>>, threads: Vec<JoinHandle<()>>) {
                 term: usize::MAX,
                 from: usize::MAX,
             })
+            .await
             .unwrap();
     }
 
     for thread in threads {
-        thread.join().unwrap();
+        thread.await.unwrap();
     }
 }
 
-#[test]
-pub fn should_accept_vote() {
-    let (threads, senders, receiver) = setup_serv(1, None);
+#[tokio::test]
+pub async fn should_accept_vote() {
+    let (threads, senders, mut receiver) = setup_serv(1, None).await;
 
     let sender = &senders[0];
 
@@ -75,22 +76,24 @@ pub fn should_accept_vote() {
             term: 1,
             from: 1,
         })
+        .await
         .expect("Send should not fail");
 
-    let message = receiver.recv().unwrap();
+    let message = receiver.recv().await.unwrap();
 
     assert_eq!(message.content, MessageContent::VoteResponse(true));
 
-    shutdown(senders, threads)
+    shutdown(senders, threads).await
 }
 
-#[test]
-pub fn should_receive_election() {
-    let (threads, senders, receiver) = setup_serv(1, Some(vec![Duration::from_millis(10)]));
+#[tokio::test]
+pub async fn should_receive_election() {
+    let (threads, senders, mut receiver) =
+        setup_serv(1, Some(vec![Duration::from_millis(10)])).await;
 
     let sender = &senders[0];
 
-    let message = receiver.recv().unwrap();
+    let message = receiver.recv().await.unwrap();
     assert_eq!(message.content, MessageContent::VoteRequest);
 
     sender
@@ -99,9 +102,10 @@ pub fn should_receive_election() {
             term: message.term,
             from: 1,
         })
+        .await
         .expect("Send should not fail");
 
-    let message = receiver.recv().unwrap();
+    let message = receiver.recv().await.unwrap();
     assert_eq!(
         message.content,
         MessageContent::AppendEntries {
@@ -110,16 +114,17 @@ pub fn should_receive_election() {
         }
     );
 
-    shutdown(senders, threads)
+    shutdown(senders, threads).await
 }
 
-#[test]
-pub fn should_retry_election() {
-    let (threads, senders, receiver) = setup_serv(1, Some(vec![Duration::from_millis(10)]));
+#[tokio::test]
+pub async fn should_retry_election() {
+    let (threads, senders, mut receiver) =
+        setup_serv(1, Some(vec![Duration::from_millis(10)])).await;
 
     let sender = &senders[0];
 
-    let message = receiver.recv().unwrap();
+    let message = receiver.recv().await.unwrap();
     assert_eq!(message.content, MessageContent::VoteRequest);
 
     sender
@@ -131,29 +136,31 @@ pub fn should_retry_election() {
             term: message.term,
             from: 1,
         })
+        .await
         .expect("Send should not fail");
 
-    let message = receiver.recv().unwrap();
+    let message = receiver.recv().await.unwrap();
     assert_eq!(message.content, MessageContent::AppendResponse(true));
 
-    let message = receiver.recv().unwrap();
+    let message = receiver.recv().await.unwrap();
     assert_eq!(message.content, MessageContent::VoteRequest);
     assert_eq!(message.term, 2);
 
-    shutdown(senders, threads)
+    shutdown(senders, threads).await
 }
 
-#[test]
-pub fn should_elect_first() {
-    let (threads, senders, receiver) = setup_serv(
+#[tokio::test]
+pub async fn should_elect_first() {
+    let (threads, senders, mut receiver) = setup_serv(
         2,
         Some(vec![Duration::from_millis(10), Duration::from_millis(100)]),
-    );
+    )
+    .await;
 
-    let message = receiver.recv().unwrap();
+    let message = receiver.recv().await.unwrap();
     assert_eq!(message.content, MessageContent::VoteRequest);
 
-    let message = receiver.recv().unwrap();
+    let message = receiver.recv().await.unwrap();
     assert_eq!(
         message.content,
         MessageContent::AppendEntries {
@@ -164,5 +171,5 @@ pub fn should_elect_first() {
 
     assert_eq!(message.term, 1);
 
-    shutdown(senders, threads)
+    shutdown(senders, threads).await
 }

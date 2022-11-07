@@ -1,7 +1,6 @@
-use std::{
-    sync::mpsc::{Receiver, RecvTimeoutError, Sender},
-    time::Duration,
-};
+use std::time::Duration;
+
+use tokio::sync::mpsc::{Receiver, Sender};
 
 use crate::{
     entry::Entry,
@@ -54,7 +53,7 @@ impl Node {
         }
     }
 
-    pub fn run(&mut self) {
+    pub async fn run(&mut self) {
         loop {
             if self.shutdown_requested {
                 break;
@@ -62,26 +61,23 @@ impl Node {
 
             let timeout = self.generate_timeout();
 
-            match self.receiver.recv_timeout(timeout) {
-                Ok(message) => {
-                    println!("Server {} received {:?}", self.id, message);
-                    // We receive something (server is not dead)
-                    self.handle_message(message)
-                }
-                Err(RecvTimeoutError::Timeout) => {
-                    // Relaunch election
-                    if self.role != Role::Leader {
-                        println!("Server {} received error, Timeout", self.id);
-                        self.start_election();
-                    } else {
-                        println!("Server {} sending heartbeat", self.id);
-                        self.send_heartbeat();
+            tokio::select! {
+                msg = self.receiver.recv() => {
+                    println!("Server {} received {:?}", self.id,msg);
+                    if let Some(msg) = msg {
+                        self.handle_message(msg).await;
                     }
                 }
-                Err(RecvTimeoutError::Disconnected) => {
-                    println!("Server {} received error, Disconnected", self.id);
-                    // Don't know (yet?)
+                _ = tokio::time::sleep(timeout) => {
+                    if self.role != Role::Leader {
+                        println!("Server {} received error, Timeout", self.id);
+                        self.start_election().await;
+                    } else {
+                        println!("Server {} sending heartbeat", self.id);
+                        self.send_heartbeat().await;
+                    }
                 }
+                // Missing Disconnect check
             }
         }
     }
@@ -102,7 +98,7 @@ impl Node {
         Duration::from_millis(timeout as u64)
     }
 
-    fn handle_message(&mut self, message: Message) {
+    async fn handle_message(&mut self, message: Message) {
         let Message {
             term,
             from,
@@ -119,7 +115,7 @@ impl Node {
                     self.role = Role::Follower;
                 }
 
-                self.emit(from, MessageContent::VoteResponse(accept));
+                self.emit(from, MessageContent::VoteResponse(accept)).await;
             }
             MessageContent::VoteResponse(granted) => {
                 // Maybe no need to check for Role::Candidate
@@ -127,7 +123,7 @@ impl Node {
                     self.candidate_votes += 1;
                     if self.candidate_votes > self.senders.len() / 2 {
                         self.role = Role::Leader;
-                        self.send_heartbeat();
+                        self.send_heartbeat().await;
                     }
                 }
             }
@@ -148,51 +144,57 @@ impl Node {
                 }
 
                 self.emit(from, MessageContent::AppendResponse(accept))
+                    .await;
             }
             _ => (),
         }
     }
 
-    fn start_election(&mut self) {
+    async fn start_election(&mut self) {
         self.role = Role::Candidate;
         self.current_term += 1;
         self.candidate_votes = 1;
         self.voted_for = self.id;
-        self.broadcast(MessageContent::VoteRequest);
+        self.broadcast(MessageContent::VoteRequest).await;
     }
 
-    fn send_heartbeat(&mut self) {
+    async fn send_heartbeat(&mut self) {
         assert!(self.role == Role::Leader);
 
         self.broadcast(MessageContent::AppendEntries {
             logs: vec![],
             leader_id: self.id,
-        });
+        })
+        .await;
     }
 
-    fn emit(&self, id: NodeId, content: MessageContent) {
-        let res = self.senders[id].send(Message {
-            content,
-            term: self.current_term,
-            from: self.id,
-        });
+    async fn emit(&self, id: NodeId, content: MessageContent) {
+        let res = self.senders[id]
+            .send(Message {
+                content,
+                term: self.current_term,
+                from: self.id,
+            })
+            .await;
 
         if let Err(err) = res {
             dbg!(err);
         }
     }
 
-    fn broadcast(&self, content: MessageContent) {
+    async fn broadcast(&self, content: MessageContent) {
         for (i, sender) in self.senders.iter().enumerate() {
             if i == self.id {
                 continue;
             }
 
-            let res = sender.send(Message {
-                content: content.clone(),
-                term: self.current_term,
-                from: self.id,
-            });
+            let res = sender
+                .send(Message {
+                    content: content.clone(),
+                    term: self.current_term,
+                    from: self.id,
+                })
+                .await;
             if let Err(err) = res {
                 dbg!(err);
             }
