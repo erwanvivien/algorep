@@ -1,4 +1,5 @@
 mod config;
+mod entry;
 mod message;
 mod node;
 
@@ -12,7 +13,6 @@ use std::thread;
 use config::CONFIG;
 use message::Message;
 use node::Node;
-
 
 fn main() {
     let node_count = CONFIG.node_count;

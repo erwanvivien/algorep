@@ -4,6 +4,7 @@ use std::{
 };
 
 use crate::{
+    entry::Entry,
     message::{Message, MessageContent, ReplAction},
     CONFIG,
 };
@@ -26,6 +27,7 @@ pub struct Node {
     role: Role,
     current_term: usize,
     voted_for: NodeId,
+    logs: Vec<Entry>,
 
     // Volatile state (for all servers)
     candidate_votes: usize,
@@ -39,10 +41,13 @@ impl Node {
             id,
             receiver,
             senders,
+
             role: Role::Follower,
             current_term: 0,
             // Will never be used at init
             voted_for: id,
+            logs: Vec::new(),
+
             candidate_votes: 0,
             shutdown_requested: false,
             election_timeout_range: CONFIG.election_timeout_range(),
@@ -70,7 +75,7 @@ impl Node {
                         self.start_election();
                     } else {
                         println!("Server {} sending heartbeat", self.id);
-                        self.broadcast(MessageContent::Heartbeat);
+                        self.send_heartbeat();
                     }
                 }
                 Err(RecvTimeoutError::Disconnected) => {
@@ -89,7 +94,6 @@ impl Node {
         }
 
         if max == min {
-            // This should never happen (bad config)
             return min;
         }
 
@@ -107,16 +111,15 @@ impl Node {
 
         match content {
             MessageContent::VoteRequest => {
-                if term <= self.current_term {
-                    // Reply false
-                    self.emit(from, MessageContent::VoteResponse(false));
-                } else {
+                let accept = term > self.current_term;
+                if accept {
                     // TODO: check if up to date
                     self.current_term = term;
                     self.voted_for = from;
                     self.role = Role::Follower;
-                    self.emit(from, MessageContent::VoteResponse(true));
                 }
+
+                self.emit(from, MessageContent::VoteResponse(accept));
             }
             MessageContent::VoteResponse(granted) => {
                 // Maybe no need to check for Role::Candidate
@@ -124,27 +127,28 @@ impl Node {
                     self.candidate_votes += 1;
                     if self.candidate_votes > self.senders.len() / 2 {
                         self.role = Role::Leader;
-                        self.broadcast(MessageContent::Heartbeat);
+                        self.send_heartbeat();
                     }
                 }
-            }
-            MessageContent::Heartbeat => {
-                let accept = term >= self.current_term;
-                if accept {
-                    self.current_term = term;
-                    self.role = Role::Follower;
-                }
-                self.emit(from, MessageContent::AppendResponse(accept))
             }
             MessageContent::Repl(action) => match action {
                 ReplAction::Shutdown => {
                     self.shutdown_requested = true;
                 }
-                // ReplAction::SetTimeout(timeout) => {
-                //     self.election_timeout_range = (timeout, timeout);
-                // }
                 _ => {}
             },
+            MessageContent::AppendEntries { leader_id, logs } => {
+                let accept = term >= self.current_term;
+                if term >= self.current_term {
+                    self.current_term = term;
+                    // TODO: fix should verify / override on conditions
+                    self.logs.extend(logs);
+
+                    self.role = Role::Follower;
+                }
+
+                self.emit(from, MessageContent::AppendResponse(accept))
+            }
             _ => (),
         }
     }
@@ -155,6 +159,15 @@ impl Node {
         self.candidate_votes = 1;
         self.voted_for = self.id;
         self.broadcast(MessageContent::VoteRequest);
+    }
+
+    fn send_heartbeat(&mut self) {
+        assert!(self.role == Role::Leader);
+
+        self.broadcast(MessageContent::AppendEntries {
+            logs: vec![],
+            leader_id: self.id,
+        });
     }
 
     fn emit(&self, id: NodeId, content: MessageContent) {

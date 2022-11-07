@@ -1,4 +1,4 @@
-use crate::node::NodeId;
+use crate::{entry::Entry, node::NodeId};
 
 #[allow(dead_code)]
 #[derive(Debug, PartialEq, PartialOrd, Clone)]
@@ -14,9 +14,11 @@ pub enum MessageContent {
     VoteRequest,
     VoteResponse(bool),
     // Log replication
+    AppendEntries {
+        logs: Vec<Entry>,
+        leader_id: NodeId,
+    },
     AppendResponse(bool),
-
-    Heartbeat,
 
     // External action
     #[allow(dead_code)]
