@@ -102,7 +102,13 @@ pub fn should_receive_election() {
         .expect("Send should not fail");
 
     let message = receiver.recv().unwrap();
-    assert_eq!(message.content, MessageContent::Heartbeat);
+    assert_eq!(
+        message.content,
+        MessageContent::AppendEntries {
+            logs: Vec::new(),
+            leader_id: 0
+        }
+    );
 
     shutdown(senders, threads)
 }
@@ -118,13 +124,17 @@ pub fn should_retry_election() {
 
     sender
         .send(Message {
-            content: MessageContent::Heartbeat,
+            content: MessageContent::AppendEntries {
+                logs: Vec::new(),
+                leader_id: 1,
+            },
             term: message.term,
             from: 1,
         })
         .expect("Send should not fail");
 
-    thread::sleep(Duration::from_millis(20));
+    let message = receiver.recv().unwrap();
+    assert_eq!(message.content, MessageContent::AppendResponse(true));
 
     let message = receiver.recv().unwrap();
     assert_eq!(message.content, MessageContent::VoteRequest);
@@ -144,7 +154,13 @@ pub fn should_elect_first() {
     assert_eq!(message.content, MessageContent::VoteRequest);
 
     let message = receiver.recv().unwrap();
-    assert_eq!(message.content, MessageContent::Heartbeat);
+    assert_eq!(
+        message.content,
+        MessageContent::AppendEntries {
+            logs: Vec::new(),
+            leader_id: 0
+        }
+    );
 
     assert_eq!(message.term, 1);
 
