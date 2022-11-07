@@ -21,6 +21,8 @@ pub struct Node {
     id: NodeId,
     receiver: Receiver<Message>,
     senders: Vec<Sender<Message>>,
+    shutdown_requested: bool,
+    pub(crate) election_timeout_range: (Duration, Duration),
 
     // Persistent state (for all server)
     role: Role,
@@ -30,16 +32,24 @@ pub struct Node {
 
     // Volatile state (for all servers)
     candidate_votes: usize,
-    shutdown_requested: bool,
-    pub(crate) election_timeout_range: (Duration, Duration),
+    commit_index: usize,
+    last_applied: usize,
+
+    // Volatile state (for leaders, reinitialized after election)
+    next_index: Vec<usize>,
+    match_index: Vec<usize>,
 }
 
 impl Node {
     pub fn new(id: NodeId, receiver: Receiver<Message>, senders: Vec<Sender<Message>>) -> Self {
+        let node_count = senders.len();
+
         Self {
             id,
             receiver,
             senders,
+            shutdown_requested: false,
+            election_timeout_range: CONFIG.election_timeout_range(),
 
             role: Role::Follower,
             current_term: 0,
@@ -48,8 +58,11 @@ impl Node {
             logs: Vec::new(),
 
             candidate_votes: 0,
-            shutdown_requested: false,
-            election_timeout_range: CONFIG.election_timeout_range(),
+            commit_index: 0,
+            last_applied: 0,
+
+            next_index: vec![1; node_count],
+            match_index: vec![0; node_count],
         }
     }
 
@@ -106,8 +119,14 @@ impl Node {
         } = message;
 
         match content {
-            MessageContent::VoteRequest => {
-                let accept = term > self.current_term;
+            MessageContent::VoteRequest {
+                last_log_index,
+                last_log_term,
+            } => {
+                let accept = term > self.current_term
+                    && last_log_term >= self.logs.last().map(|e| e.term).unwrap_or(0)
+                    && last_log_index >= self.logs.len();
+
                 if accept {
                     // TODO: check if up to date
                     self.current_term = term;
@@ -118,12 +137,10 @@ impl Node {
                 self.emit(from, MessageContent::VoteResponse(accept)).await;
             }
             MessageContent::VoteResponse(granted) => {
-                // Maybe no need to check for Role::Candidate
                 if self.current_term == term && self.role == Role::Candidate && granted {
                     self.candidate_votes += 1;
                     if self.candidate_votes > self.senders.len() / 2 {
-                        self.role = Role::Leader;
-                        self.send_heartbeat().await;
+                        self.promote_leader().await;
                     }
                 }
             }
@@ -133,7 +150,7 @@ impl Node {
                 }
                 _ => {}
             },
-            MessageContent::AppendEntries { leader_id, logs } => {
+            MessageContent::AppendEntries { logs } => {
                 let accept = term >= self.current_term;
                 if term >= self.current_term {
                     self.current_term = term;
@@ -155,17 +172,29 @@ impl Node {
         self.current_term += 1;
         self.candidate_votes = 1;
         self.voted_for = self.id;
-        self.broadcast(MessageContent::VoteRequest).await;
+        self.broadcast(MessageContent::VoteRequest {
+            last_log_index: self.logs.len(),
+            last_log_term: self.logs.last().map(|e| e.term).unwrap_or(0),
+        })
+        .await;
+    }
+
+    async fn promote_leader(&mut self) {
+        self.role = Role::Leader;
+
+        for i in 0..self.senders.len() {
+            self.next_index[i] = self.logs.len();
+            self.match_index[i] = 0;
+        }
+
+        self.send_heartbeat().await;
     }
 
     async fn send_heartbeat(&mut self) {
         assert!(self.role == Role::Leader);
 
-        self.broadcast(MessageContent::AppendEntries {
-            logs: vec![],
-            leader_id: self.id,
-        })
-        .await;
+        self.broadcast(MessageContent::AppendEntries { logs: vec![] })
+            .await;
     }
 
     async fn emit(&self, id: NodeId, content: MessageContent) {
@@ -183,18 +212,18 @@ impl Node {
     }
 
     async fn broadcast(&self, content: MessageContent) {
+        let message = Message {
+            content,
+            term: self.current_term,
+            from: self.id,
+        };
+
         for (i, sender) in self.senders.iter().enumerate() {
             if i == self.id {
                 continue;
             }
 
-            let res = sender
-                .send(Message {
-                    content: content.clone(),
-                    term: self.current_term,
-                    from: self.id,
-                })
-                .await;
+            let res = sender.send(message.clone()).await;
             if let Err(err) = res {
                 dbg!(err);
             }

@@ -72,9 +72,12 @@ pub async fn should_accept_vote() {
 
     sender
         .send(Message {
-            content: MessageContent::VoteRequest,
-            term: 1,
+            content: MessageContent::VoteRequest {
+                last_log_index: 0,
+                last_log_term: 0,
+            },
             from: 1,
+            term: 1,
         })
         .await
         .expect("Send should not fail");
@@ -94,7 +97,13 @@ pub async fn should_receive_election() {
     let sender = &senders[0];
 
     let message = receiver.recv().await.unwrap();
-    assert_eq!(message.content, MessageContent::VoteRequest);
+    assert_eq!(
+        message.content,
+        MessageContent::VoteRequest {
+            last_log_index: 0,
+            last_log_term: 0,
+        }
+    );
 
     sender
         .send(Message {
@@ -108,10 +117,7 @@ pub async fn should_receive_election() {
     let message = receiver.recv().await.unwrap();
     assert_eq!(
         message.content,
-        MessageContent::AppendEntries {
-            logs: Vec::new(),
-            leader_id: 0
-        }
+        MessageContent::AppendEntries { logs: Vec::new() }
     );
 
     shutdown(senders, threads).await
@@ -125,14 +131,17 @@ pub async fn should_retry_election() {
     let sender = &senders[0];
 
     let message = receiver.recv().await.unwrap();
-    assert_eq!(message.content, MessageContent::VoteRequest);
+    assert_eq!(
+        message.content,
+        MessageContent::VoteRequest {
+            last_log_index: 0,
+            last_log_term: 0,
+        }
+    );
 
     sender
         .send(Message {
-            content: MessageContent::AppendEntries {
-                logs: Vec::new(),
-                leader_id: 1,
-            },
+            content: MessageContent::AppendEntries { logs: Vec::new() },
             term: message.term,
             from: 1,
         })
@@ -143,7 +152,13 @@ pub async fn should_retry_election() {
     assert_eq!(message.content, MessageContent::AppendResponse(true));
 
     let message = receiver.recv().await.unwrap();
-    assert_eq!(message.content, MessageContent::VoteRequest);
+    assert_eq!(
+        message.content,
+        MessageContent::VoteRequest {
+            last_log_index: 0,
+            last_log_term: 0,
+        }
+    );
     assert_eq!(message.term, 2);
 
     shutdown(senders, threads).await
@@ -158,15 +173,18 @@ pub async fn should_elect_first() {
     .await;
 
     let message = receiver.recv().await.unwrap();
-    assert_eq!(message.content, MessageContent::VoteRequest);
+    assert_eq!(
+        message.content,
+        MessageContent::VoteRequest {
+            last_log_index: 0,
+            last_log_term: 0,
+        }
+    );
 
     let message = receiver.recv().await.unwrap();
     assert_eq!(
         message.content,
-        MessageContent::AppendEntries {
-            logs: Vec::new(),
-            leader_id: 0
-        }
+        MessageContent::AppendEntries { logs: Vec::new() }
     );
 
     assert_eq!(message.term, 1);

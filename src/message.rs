@@ -11,12 +11,15 @@ pub enum ReplAction {
 
 #[derive(Debug, PartialEq, PartialOrd, Clone)]
 pub enum MessageContent {
-    VoteRequest,
+    VoteRequest {
+        // Currently represent the log length, because it would be -1 on startup
+        last_log_index: usize,
+        last_log_term: usize,
+    },
     VoteResponse(bool),
     // Log replication
     AppendEntries {
         logs: Vec<Entry>,
-        leader_id: NodeId,
     },
     AppendResponse(bool),
 
@@ -25,7 +28,7 @@ pub enum MessageContent {
     Repl(ReplAction),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Message {
     pub content: MessageContent,
     pub from: NodeId,
