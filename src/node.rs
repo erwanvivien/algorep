@@ -1,6 +1,9 @@
-use std::time::Duration;
+use std::{pin::Pin, time::Duration};
 
-use tokio::sync::mpsc::{Receiver, Sender};
+use tokio::{
+    sync::mpsc::{Receiver, Sender},
+    time::Sleep,
+};
 
 use crate::{
     entry::Entry,
@@ -22,6 +25,7 @@ pub struct Node {
     receiver: Receiver<Message>,
     senders: Vec<Sender<Message>>,
     shutdown_requested: bool,
+    simulate_crash: bool,
     pub(crate) election_timeout_range: (Duration, Duration),
 
     // Persistent state (for all server)
@@ -49,6 +53,7 @@ impl Node {
             receiver,
             senders,
             shutdown_requested: false,
+            simulate_crash: false,
             election_timeout_range: CONFIG.election_timeout_range(),
 
             role: Role::Follower,
@@ -67,21 +72,41 @@ impl Node {
     }
 
     pub async fn run(&mut self) {
+        let mut timeout = self.generate_timeout();
+
         loop {
             if self.shutdown_requested {
                 break;
             }
 
-            let timeout = self.generate_timeout();
-
             tokio::select! {
                 msg = self.receiver.recv() => {
                     println!("Server {} received {:?}", self.id,msg);
-                    if let Some(msg) = msg {
-                        self.handle_message(msg).await;
+                    match msg {
+                        Some(Message { content: MessageContent::Repl(action), ..}) => {
+                            self.handle_repl(action)
+                        },
+                        Some(msg) => {
+                            if !self.simulate_crash {
+                                self.handle_message(msg).await;
+
+                                // Refresh timeout
+                                timeout = self.generate_timeout();
+                            }
+                        }
+                        None => {
+                            // We have been disconnected
+                        }
                     }
-                }
-                _ = tokio::time::sleep(timeout) => {
+                },
+                _ = &mut timeout => {
+                    // Refresh timeout
+                    timeout = self.generate_timeout();
+
+                    if self.simulate_crash {
+                        continue;
+                    }
+
                     if self.role != Role::Leader {
                         println!("Server {} received error, Timeout", self.id);
                         self.start_election().await;
@@ -90,25 +115,26 @@ impl Node {
                         self.send_heartbeat().await;
                     }
                 }
-                // Missing Disconnect check
             }
         }
     }
 
-    fn generate_timeout(&self) -> Duration {
-        let (min, max) = self.election_timeout_range;
+    fn generate_timeout(&self) -> Pin<Box<Sleep>> {
+        let duration = {
+            let (min, max) = self.election_timeout_range;
 
-        if self.role == Role::Leader {
-            return min / 2;
-        }
+            if self.role == Role::Leader {
+                min / 2
+            } else if max == min {
+                min
+            } else {
+                let timeout =
+                    rand::random::<u128>() % (max.as_millis() - min.as_millis()) + min.as_millis();
+                Duration::from_millis(timeout as u64)
+            }
+        };
 
-        if max == min {
-            return min;
-        }
-
-        let timeout =
-            rand::random::<u128>() % (max.as_millis() - min.as_millis()) + min.as_millis();
-        Duration::from_millis(timeout as u64)
+        Box::pin(tokio::time::sleep(duration))
     }
 
     async fn handle_message(&mut self, message: Message) {
@@ -195,6 +221,21 @@ impl Node {
 
         self.broadcast(MessageContent::AppendEntries { logs: vec![] })
             .await;
+    }
+
+    fn handle_repl(&mut self, action: ReplAction) {
+        match action {
+            ReplAction::Crash => {
+                self.simulate_crash = true;
+            }
+            ReplAction::Start => {
+                self.simulate_crash = false;
+            }
+            ReplAction::Shutdown => {
+                self.shutdown_requested = true;
+            }
+            _ => {}
+        }
     }
 
     async fn emit(&self, id: NodeId, content: MessageContent) {
