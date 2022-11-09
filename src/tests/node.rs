@@ -117,7 +117,12 @@ pub async fn should_receive_election() {
     let message = receiver.recv().await.unwrap();
     assert_eq!(
         message.content,
-        MessageContent::AppendEntries { logs: Vec::new() }
+        MessageContent::AppendEntries {
+            entries: Vec::new(),
+            prev_log_index: 0,
+            prev_log_term: 0,
+            leader_commit: 0
+        }
     );
 
     shutdown(senders, threads).await
@@ -141,7 +146,12 @@ pub async fn should_retry_election() {
 
     sender
         .send(Message {
-            content: MessageContent::AppendEntries { logs: Vec::new() },
+            content: MessageContent::AppendEntries {
+                entries: Vec::new(),
+                prev_log_index: 0,
+                prev_log_term: 0,
+                leader_commit: 0,
+            },
             term: message.term,
             from: 1,
         })
@@ -184,7 +194,12 @@ pub async fn should_elect_first() {
     let message = receiver.recv().await.unwrap();
     assert_eq!(
         message.content,
-        MessageContent::AppendEntries { logs: Vec::new() }
+        MessageContent::AppendEntries {
+            entries: Vec::new(),
+            prev_log_index: 0,
+            prev_log_term: 0,
+            leader_commit: 0
+        }
     );
 
     assert_eq!(message.term, 1);

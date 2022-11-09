@@ -19,7 +19,11 @@ pub enum MessageContent {
     VoteResponse(bool),
     // Log replication
     AppendEntries {
-        logs: Vec<Entry>,
+        entries: Vec<Entry>,
+        // leader_id: NodeId,
+        prev_log_index: usize,
+        prev_log_term: usize,
+        leader_commit: usize,
     },
     AppendResponse(bool),
 

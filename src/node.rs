@@ -112,7 +112,7 @@ impl Node {
                         self.start_election().await;
                     } else {
                         println!("Server {} sending heartbeat", self.id);
-                        self.send_heartbeat().await;
+                        self.send_entries().await;
                     }
                 }
             }
@@ -152,19 +152,37 @@ impl Node {
     async fn promote_leader(&mut self) {
         self.role = Role::Leader;
 
-        for i in 0..self.senders.len() {
-            self.next_index[i] = self.logs.len();
-            self.match_index[i] = 0;
-        }
+        self.next_index.fill(self.logs.len() + 1);
+        self.match_index.fill(0);
 
-        self.send_heartbeat().await;
+        self.send_entries().await;
     }
 
-    async fn send_heartbeat(&mut self) {
+    async fn send_entries(&self) {
         assert!(self.role == Role::Leader);
 
-        self.broadcast(MessageContent::AppendEntries { logs: vec![] })
+        for follower in 0..self.senders.len() {
+            if follower == self.id {
+                continue;
+            }
+
+            let next_index = self.next_index[follower];
+            self.emit(
+                follower,
+                MessageContent::AppendEntries {
+                    prev_log_index: next_index - 1,
+
+                    prev_log_term: if next_index > 1 {
+                        self.logs[next_index - 2].term
+                    } else {
+                        0
+                    },
+                    entries: self.logs[(next_index - 1)..].to_vec(),
+                    leader_commit: self.commit_index,
+                },
+            )
             .await;
+        }
     }
 }
 
@@ -220,7 +238,7 @@ impl Node {
                     }
                 }
             }
-            MessageContent::AppendEntries { logs } => {
+            MessageContent::AppendEntries { entries: logs, .. } => {
                 let accept = term >= self.current_term;
                 if term >= self.current_term {
                     self.current_term = term;
