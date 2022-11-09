@@ -1,4 +1,4 @@
-use std::{pin::Pin, time::Duration};
+use std::{cmp::min, pin::Pin, time::Duration};
 
 use tokio::{
     sync::mpsc::{Receiver, Sender},
@@ -27,6 +27,7 @@ pub struct Node {
     shutdown_requested: bool,
     simulate_crash: bool,
     pub(crate) election_timeout_range: (Duration, Duration),
+    leader_id: Option<NodeId>,
 
     // Persistent state (for all server)
     role: Role,
@@ -55,6 +56,7 @@ impl Node {
             shutdown_requested: false,
             simulate_crash: false,
             election_timeout_range: CONFIG.election_timeout_range(),
+            leader_id: None,
 
             role: Role::Follower,
             current_term: 0,
@@ -151,6 +153,7 @@ impl Node {
 
     async fn promote_leader(&mut self) {
         self.role = Role::Leader;
+        self.leader_id = Some(self.id);
 
         self.next_index.fill(self.logs.len() + 1);
         self.match_index.fill(0);
@@ -171,7 +174,6 @@ impl Node {
                 follower,
                 MessageContent::AppendEntries {
                     prev_log_index: next_index - 1,
-
                     prev_log_term: if next_index > 1 {
                         self.logs[next_index - 2].term
                     } else {
@@ -238,17 +240,34 @@ impl Node {
                     }
                 }
             }
-            MessageContent::AppendEntries { entries: logs, .. } => {
-                let accept = term >= self.current_term;
-                if term >= self.current_term {
-                    self.current_term = term;
-                    // TODO: fix should verify / override on conditions
-                    self.logs.extend(logs);
+            MessageContent::AppendEntries {
+                entries,
+                prev_log_index,
+                prev_log_term,
+                leader_commit,
+            } => {
+                let same_term = term >= self.current_term;
 
+                if same_term {
+                    self.current_term = term;
                     self.role = Role::Follower;
+                    self.leader_id = Some(from);
                 }
 
-                self.emit(from, MessageContent::AppendResponse(accept))
+                let same_logs =
+                    self.logs.get(prev_log_index - 1).map(|e| e.term) == Some(prev_log_term);
+
+                let accepted = same_term && same_logs;
+                if accepted {
+                    self.logs.truncate(prev_log_index - 1);
+                    self.logs.extend(entries);
+
+                    if leader_commit > self.commit_index {
+                        self.commit_index = min(leader_commit, self.logs.len());
+                    }
+                }
+
+                self.emit(from, MessageContent::AppendResponse(accepted))
                     .await;
             }
             // Repl case is handled in `handle_repl`

@@ -11,12 +11,13 @@ pub enum ReplAction {
 
 #[derive(Debug, PartialEq, PartialOrd, Clone)]
 pub enum MessageContent {
+    // Election
     VoteRequest {
-        // Currently represent the log length, because it would be -1 on startup
         last_log_index: usize,
         last_log_term: usize,
     },
     VoteResponse(bool),
+
     // Log replication
     AppendEntries {
         entries: Vec<Entry>,
