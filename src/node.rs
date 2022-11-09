@@ -137,6 +137,56 @@ impl Node {
         Box::pin(tokio::time::sleep(duration))
     }
 
+    async fn start_election(&mut self) {
+        self.role = Role::Candidate;
+        self.current_term += 1;
+        self.candidate_votes = 1;
+        self.voted_for = self.id;
+        self.broadcast(MessageContent::VoteRequest {
+            last_log_index: self.logs.len(),
+            last_log_term: self.logs.last().map(|e| e.term).unwrap_or(0),
+        })
+        .await;
+    }
+
+    async fn promote_leader(&mut self) {
+        self.role = Role::Leader;
+
+        for i in 0..self.senders.len() {
+            self.next_index[i] = self.logs.len();
+            self.match_index[i] = 0;
+        }
+
+        self.send_heartbeat().await;
+    }
+
+    async fn send_heartbeat(&mut self) {
+        assert!(self.role == Role::Leader);
+
+        self.broadcast(MessageContent::AppendEntries { logs: vec![] })
+            .await;
+    }
+}
+
+/// Message Handling part
+impl Node {
+    /// Handles only MessageContent::Repl
+    fn handle_repl(&mut self, action: ReplAction) {
+        match action {
+            ReplAction::Crash => {
+                self.simulate_crash = true;
+            }
+            ReplAction::Start => {
+                self.simulate_crash = false;
+            }
+            ReplAction::Shutdown => {
+                self.shutdown_requested = true;
+            }
+            _ => {}
+        }
+    }
+
+    /// Handles every message exec MessageContent::Repl
     async fn handle_message(&mut self, message: Message) {
         let Message {
             term,
@@ -187,52 +237,10 @@ impl Node {
             _ => (),
         }
     }
+}
 
-    async fn start_election(&mut self) {
-        self.role = Role::Candidate;
-        self.current_term += 1;
-        self.candidate_votes = 1;
-        self.voted_for = self.id;
-        self.broadcast(MessageContent::VoteRequest {
-            last_log_index: self.logs.len(),
-            last_log_term: self.logs.last().map(|e| e.term).unwrap_or(0),
-        })
-        .await;
-    }
-
-    async fn promote_leader(&mut self) {
-        self.role = Role::Leader;
-
-        for i in 0..self.senders.len() {
-            self.next_index[i] = self.logs.len();
-            self.match_index[i] = 0;
-        }
-
-        self.send_heartbeat().await;
-    }
-
-    async fn send_heartbeat(&mut self) {
-        assert!(self.role == Role::Leader);
-
-        self.broadcast(MessageContent::AppendEntries { logs: vec![] })
-            .await;
-    }
-
-    fn handle_repl(&mut self, action: ReplAction) {
-        match action {
-            ReplAction::Crash => {
-                self.simulate_crash = true;
-            }
-            ReplAction::Start => {
-                self.simulate_crash = false;
-            }
-            ReplAction::Shutdown => {
-                self.shutdown_requested = true;
-            }
-            _ => {}
-        }
-    }
-
+/// Communication part (emit & broadcast)
+impl Node {
     async fn emit(&self, id: NodeId, content: MessageContent) {
         let res = self.senders[id]
             .send(Message {
