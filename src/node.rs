@@ -170,12 +170,6 @@ impl Node {
                     }
                 }
             }
-            MessageContent::Repl(action) => match action {
-                ReplAction::Shutdown => {
-                    self.shutdown_requested = true;
-                }
-                _ => {}
-            },
             MessageContent::AppendEntries { logs } => {
                 let accept = term >= self.current_term;
                 if term >= self.current_term {
@@ -189,6 +183,7 @@ impl Node {
                 self.emit(from, MessageContent::AppendResponse(accept))
                     .await;
             }
+            // Repl case is handled in `handle_repl`
             _ => (),
         }
     }
