@@ -34,7 +34,7 @@ async fn main() {
         let senders = senders.clone();
 
         let child = tokio::spawn(async move {
-            let mut node = Node::new(id, receiver, senders);
+            let mut node = Node::new(id, node_count, receiver, senders);
             node.run().await;
         });
 

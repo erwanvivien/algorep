@@ -1,4 +1,4 @@
-use crate::{entry::Entry, node::NodeId};
+use crate::{entry::{Entry, Action}, node::NodeId};
 
 #[allow(dead_code)]
 #[derive(Debug, PartialEq, PartialOrd, Clone)]
@@ -7,6 +7,12 @@ pub enum ReplAction {
     Crash,
     Start,
     Shutdown,
+}
+
+#[derive(Debug, PartialEq, PartialOrd, Clone)]
+pub enum ClientResponseError {
+    KeyNotFound,
+    WrongLeader(Option<NodeId>),
 }
 
 #[derive(Debug, PartialEq, PartialOrd, Clone)]
@@ -31,6 +37,8 @@ pub enum MessageContent {
     // External action
     #[allow(dead_code)]
     Repl(ReplAction),
+    ClientRequest(Action),
+    ClientResponse(Result<String, ClientResponseError>)
 }
 
 #[derive(Debug, Clone)]

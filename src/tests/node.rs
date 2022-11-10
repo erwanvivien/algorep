@@ -34,7 +34,7 @@ async fn setup_serv(
         let timeouts = timeouts.clone();
 
         let child = tokio::spawn(async move {
-            let mut node = Node::new(id, receiver, senders);
+            let mut node = Node::new(id, count + 1, receiver, senders);
             if let Some(durations) = timeouts {
                 node.election_timeout_range = (durations[id], durations[id]);
             }

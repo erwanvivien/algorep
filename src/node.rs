@@ -6,8 +6,8 @@ use tokio::{
 };
 
 use crate::{
-    entry::Entry,
-    message::{Message, MessageContent, ReplAction},
+    entry::{Action, Entry},
+    message::{ClientResponseError, Message, MessageContent, ReplAction},
     CONFIG,
 };
 
@@ -22,6 +22,7 @@ pub enum Role {
 
 pub struct Node {
     id: NodeId,
+    node_count: usize,
     receiver: Receiver<Message>,
     senders: Vec<Sender<Message>>,
     shutdown_requested: bool,
@@ -32,25 +33,31 @@ pub struct Node {
     // Persistent state (for all server)
     role: Role,
     current_term: usize,
-    voted_for: NodeId,
+    voted_for: Option<NodeId>,
     logs: Vec<Entry>,
 
     // Volatile state (for all servers)
-    candidate_votes: usize,
     commit_index: usize,
     last_applied: usize,
 
     // Volatile state (for leaders, reinitialized after election)
     next_index: Vec<usize>,
     match_index: Vec<usize>,
+
+    // Volatile state (for candidates)
+    candidate_votes: usize,
 }
 
 impl Node {
-    pub fn new(id: NodeId, receiver: Receiver<Message>, senders: Vec<Sender<Message>>) -> Self {
-        let node_count = senders.len();
-
+    pub fn new(
+        id: NodeId,
+        node_count: usize,
+        receiver: Receiver<Message>,
+        senders: Vec<Sender<Message>>,
+    ) -> Self {
         Self {
             id,
+            node_count,
             receiver,
             senders,
             shutdown_requested: false,
@@ -60,8 +67,7 @@ impl Node {
 
             role: Role::Follower,
             current_term: 0,
-            // Will never be used at init
-            voted_for: id,
+            voted_for: None,
             logs: Vec::new(),
 
             candidate_votes: 0,
@@ -83,21 +89,26 @@ impl Node {
 
             tokio::select! {
                 msg = self.receiver.recv() => {
-                    println!("Server {} received {:?}", self.id,msg);
+                    println!("Server {} received {:?}", self.id, msg);
+                    if msg.is_none() {
+                        continue;
+                    }
+                    
+                    let msg = msg.unwrap();
                     match msg {
-                        Some(Message { content: MessageContent::Repl(action), ..}) => {
+                        Message { content: MessageContent::Repl(action), ..} => {
                             self.handle_repl(action)
                         },
-                        Some(msg) => {
+                        Message { content: MessageContent::ClientRequest(_), .. } => {
+                            self.handle_client_action(msg).await
+                        },
+                        msg => {
                             if !self.simulate_crash {
                                 self.handle_message(msg).await;
 
                                 // Refresh timeout
                                 timeout = self.generate_timeout();
                             }
-                        }
-                        None => {
-                            // We have been disconnected
                         }
                     }
                 },
@@ -143,7 +154,7 @@ impl Node {
         self.role = Role::Candidate;
         self.current_term += 1;
         self.candidate_votes = 1;
-        self.voted_for = self.id;
+        self.voted_for = Some(self.id);
         self.broadcast(MessageContent::VoteRequest {
             last_log_index: self.logs.len(),
             last_log_term: self.logs.last().map(|e| e.term).unwrap_or(0),
@@ -164,7 +175,7 @@ impl Node {
     async fn send_entries(&self) {
         assert!(self.role == Role::Leader);
 
-        for follower in 0..self.senders.len() {
+        for follower in 0..self.node_count {
             if follower == self.id {
                 continue;
             }
@@ -206,6 +217,44 @@ impl Node {
         }
     }
 
+    async fn handle_client_action(&mut self, message: Message) {
+        if let Message {
+            content: MessageContent::ClientRequest(action),
+            from,
+            ..
+        } = message
+        {
+            if self.role != Role::Leader {
+                println!("Server {} received error, Not a leader", self.id);
+                self.emit(
+                    from,
+                    MessageContent::ClientResponse(Err(ClientResponseError::WrongLeader(
+                        self.leader_id,
+                    ))),
+                )
+                .await;
+
+                return;
+            }
+
+            match action.clone() {
+                Action::Set { key, value } => {
+                    let entry = Entry {
+                        action,
+                        term: self.current_term,
+                    };
+                    self.logs.push(entry);
+                    self.send_entries().await;
+
+                    // TODO: Queue response until entry is committed
+                    self.emit(from, MessageContent::ClientResponse(Ok(value.into())))
+                        .await;
+                }
+            }
+
+        }
+    }
+
     /// Handles every message exec MessageContent::Repl
     async fn handle_message(&mut self, message: Message) {
         let Message {
@@ -223,12 +272,9 @@ impl Node {
                     && last_log_term >= self.logs.last().map(|e| e.term).unwrap_or(0)
                     && last_log_index >= self.logs.len();
 
-                if accept {
-                    // TODO: check if up to date
-                    self.current_term = term;
-                    self.voted_for = from;
-                    self.role = Role::Follower;
-                }
+                self.current_term = term;
+                self.voted_for = if accept { Some(from) } else { None };
+                self.role = Role::Follower;
 
                 self.emit(from, MessageContent::VoteResponse(accept)).await;
             }
@@ -254,12 +300,14 @@ impl Node {
                     self.leader_id = Some(from);
                 }
 
-                let same_logs =
-                    self.logs.get(prev_log_index - 1).map(|e| e.term) == Some(prev_log_term);
+                let same_logs = prev_log_index == 0
+                    || self.logs.get(prev_log_index - 1).map(|e| e.term) == Some(prev_log_term);
 
-                let accepted = same_term && same_logs;
-                if accepted {
-                    self.logs.truncate(prev_log_index - 1);
+                let success = same_term && same_logs;
+                if success {
+                    if prev_log_index != 0 {
+                        self.logs.truncate(prev_log_index - 1);
+                    }
                     self.logs.extend(entries);
 
                     if leader_commit > self.commit_index {
@@ -267,9 +315,13 @@ impl Node {
                     }
                 }
 
-                self.emit(from, MessageContent::AppendResponse(accepted))
+                self.emit(from, MessageContent::AppendResponse(success))
                     .await;
             }
+            // TODO: AppendResponse
+            // MessageContent::AppendResponse(success) => {
+            //     self.match_index[from] =
+            // }
             // Repl case is handled in `handle_repl`
             _ => (),
         }
@@ -299,7 +351,7 @@ impl Node {
             from: self.id,
         };
 
-        for (i, sender) in self.senders.iter().enumerate() {
+        for (i, sender) in self.senders[..self.node_count].iter().enumerate() {
             if i == self.id {
                 continue;
             }
