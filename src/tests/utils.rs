@@ -18,7 +18,7 @@ pub async fn setup_servers(
     count: usize,
     timeouts: Option<Vec<Duration>>,
     fake: Fake,
-) -> (Vec<JoinHandle<()>>, Vec<Sender<Message>>, Vec<Receiver<Message>>) {
+) -> (Vec<JoinHandle<()>>, Vec<Sender<Message>>, VecDeque<Receiver<Message>>) {
     assert!(timeouts
         .clone()
         .map_or_else(|| true, |durations| durations.len() == count));
@@ -63,7 +63,7 @@ pub async fn setup_servers(
         threads.push(child);
     }
 
-    return (threads, senders, receivers.into());
+    return (threads, senders, receivers);
 }
 
 pub async fn shutdown(senders: Vec<Sender<Message>>, threads: Vec<JoinHandle<()>>) {

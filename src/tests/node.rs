@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use crate::entry::Action;
+use crate::entry::{Action, Entry};
 use crate::message::{Message, MessageContent};
 
 use super::utils::{assert_no_message, assert_vote, setup_servers, shutdown, Fake};
@@ -173,5 +173,59 @@ pub async fn client_send_request() {
     );
 
     assert_no_message(client_receiver).await;
+    shutdown(senders, threads).await
+}
+
+#[tokio::test]
+pub async fn client_server_should_receive_entry() {
+    let (threads, senders, mut receivers) = setup_servers(
+        2,
+        Some(vec![Duration::from_millis(100), Duration::from_millis(500)]),
+        Fake::ClientServer,
+    )
+    .await;
+
+    let mut server_receiver = receivers.pop_front().unwrap();
+    let mut client_receiver = receivers.pop_front().unwrap();
+
+    assert_vote(&mut server_receiver, &senders[0]).await;
+
+    let leader = &senders[0];
+    leader
+        .send(Message {
+            content: MessageContent::ClientRequest(Action::Set {
+                key: String::from("key"),
+                value: String::from("value"),
+            }),
+            term: 0,
+            from: 3, // client
+        })
+        .await
+        .unwrap();
+
+    let resp = client_receiver.recv().await.unwrap();
+    assert_eq!(
+        resp.content,
+        MessageContent::ClientResponse(Ok(String::from("key")))
+    );
+
+    let resp = server_receiver.recv().await.unwrap();
+    assert_eq!(
+        resp.content,
+        MessageContent::AppendEntries {
+            entries: vec![Entry {
+                term: 1,
+                action: Action::Set {
+                    key: String::from("key"),
+                    value: String::from("value")
+                }
+            }],
+            prev_log_index: 0,
+            prev_log_term: 0,
+            leader_commit: 0
+        }
+    );
+
+    assert_no_message(&mut client_receiver).await;
     shutdown(senders, threads).await
 }
