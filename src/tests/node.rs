@@ -73,7 +73,13 @@ pub async fn should_retry_election() {
         .expect("Send should not fail");
 
     let message = receiver.recv().await.unwrap();
-    assert_eq!(message.content, MessageContent::AppendResponse(true));
+    assert_eq!(
+        message.content,
+        MessageContent::AppendResponse {
+            success: true,
+            match_index: 0
+        }
+    );
 
     let message = receiver.recv().await.unwrap();
     assert_eq!(
@@ -210,21 +216,37 @@ pub async fn client_server_should_receive_entry() {
     );
 
     let resp = server_receiver.recv().await.unwrap();
-    assert_eq!(
-        resp.content,
-        MessageContent::AppendEntries {
-            entries: vec![Entry {
-                term: 1,
-                action: Action::Set {
-                    key: String::from("key"),
-                    value: String::from("value")
-                }
-            }],
-            prev_log_index: 0,
-            prev_log_term: 0,
-            leader_commit: 0
-        }
-    );
+    let expected_content = MessageContent::AppendEntries {
+        entries: vec![Entry {
+            term: 1,
+            action: Action::Set {
+                key: String::from("key"),
+                value: String::from("value"),
+            },
+        }],
+        prev_log_index: 0,
+        prev_log_term: 0,
+        leader_commit: 0,
+    };
+    assert_eq!(resp.content, expected_content);
+
+    leader.send(Message {
+        content: MessageContent::AppendResponse {
+            success: true,
+            match_index: 1,
+        },
+        term: 1,
+        from: 2,
+    }).await.unwrap();
+
+    let resp = server_receiver.recv().await.unwrap();
+    let expected_content = MessageContent::AppendEntries {
+        entries: vec![],
+        prev_log_index: 1,
+        prev_log_term: 1,
+        leader_commit: 1,
+    };
+    assert_eq!(resp.content, expected_content);
 
     assert_no_message(&mut client_receiver).await;
     shutdown(senders, threads).await

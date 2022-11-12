@@ -32,7 +32,10 @@ pub enum MessageContent {
         prev_log_term: usize,
         leader_commit: usize,
     },
-    AppendResponse(bool),
+    AppendResponse {
+        success: bool,
+        match_index: usize,
+    },
 
     // External action
     #[allow(dead_code)]

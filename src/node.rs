@@ -93,7 +93,7 @@ impl Node {
                     if msg.is_none() {
                         continue;
                     }
-                    
+
                     let msg = msg.unwrap();
                     match msg {
                         Message { content: MessageContent::Repl(action), ..} => {
@@ -235,7 +235,7 @@ impl Node {
                             ))),
                         )
                         .await;
-        
+
                         return;
                     }
 
@@ -315,13 +315,39 @@ impl Node {
                     }
                 }
 
-                self.emit(from, MessageContent::AppendResponse(success))
-                    .await;
+                self.emit(
+                    from,
+                    MessageContent::AppendResponse {
+                        success,
+                        match_index: self.logs.len(),
+                    },
+                )
+                .await;
             }
             // TODO: AppendResponse
-            // MessageContent::AppendResponse(success) => {
-            //     self.match_index[from] =
-            // }
+            MessageContent::AppendResponse {
+                match_index,
+                success,
+            } => {
+                if success {
+                    self.match_index[from] = match_index;
+                    self.next_index[from] = match_index + 1;
+
+                    // Recompute commit index
+                    let mut match_indices = self.match_index.clone();
+                    match_indices[self.id] = self.logs.len();
+                    match_indices.sort();
+                    let new_commit_index = match_indices[self.senders.len() / 2];
+
+                    if new_commit_index > self.commit_index
+                        && self.logs[new_commit_index - 1].term == self.current_term
+                    {
+                        self.commit_index = new_commit_index;
+                    }
+                } else {
+                    self.next_index[from] -= 1;
+                }
+            }
             // Repl case is handled in `handle_repl`
             _ => (),
         }
