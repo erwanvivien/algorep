@@ -45,5 +45,6 @@ pub enum MessageContent {
 pub struct Message {
     pub content: MessageContent,
     pub from: NodeId,
+    // TODO: move append entries / vote_request
     pub term: usize,
 }

@@ -28,6 +28,14 @@ async fn main() {
         receivers.push_back(receiver);
     }
 
+    let client_count = 1;
+    for _ in 0..client_count {
+        let (sender, receiver) = mpsc::channel::<Message>(4096);
+
+        senders.push(sender);
+        receivers.push_back(receiver);
+    }
+
     for id in 0..node_count {
         // The sender endpoint can be copied
         let receiver = receivers.pop_front().unwrap();
@@ -40,6 +48,21 @@ async fn main() {
 
         threads.push(child);
     }
+
+    // Remaining receivers are clients
+    let _ = senders[node_count]
+        .send(Message {
+            content: message::MessageContent::ClientRequest(entry::Action::Set {
+                key: "key".into(),
+                value: "value".into(),
+            }),
+            from: node_count,
+            term: 0,
+        })
+        .await
+        .unwrap();
+    let tmp = receivers[0].recv().await;
+    dbg!(tmp);
 
     for thread in threads.into_iter() {
         let _ = thread.await;

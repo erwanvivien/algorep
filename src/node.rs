@@ -224,21 +224,21 @@ impl Node {
             ..
         } = message
         {
-            if self.role != Role::Leader {
-                println!("Server {} received error, Not a leader", self.id);
-                self.emit(
-                    from,
-                    MessageContent::ClientResponse(Err(ClientResponseError::WrongLeader(
-                        self.leader_id,
-                    ))),
-                )
-                .await;
-
-                return;
-            }
-
             match action.clone() {
                 Action::Set { key, value } => {
+                    if self.role != Role::Leader {
+                        println!("Server {} received error, Not a leader", self.id);
+                        self.emit(
+                            from,
+                            MessageContent::ClientResponse(Err(ClientResponseError::WrongLeader(
+                                self.leader_id,
+                            ))),
+                        )
+                        .await;
+        
+                        return;
+                    }
+
                     let entry = Entry {
                         action,
                         term: self.current_term,
@@ -247,11 +247,11 @@ impl Node {
                     self.send_entries().await;
 
                     // TODO: Queue response until entry is committed
-                    self.emit(from, MessageContent::ClientResponse(Ok(value.into())))
+                    self.emit(from, MessageContent::ClientResponse(Ok(String::from(key))))
                         .await;
                 }
+                Action::Get { key } => todo!(),
             }
-
         }
     }
 
