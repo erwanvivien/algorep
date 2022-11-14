@@ -8,17 +8,11 @@ use tokio::{
 use crate::{
     entry::{Action, Entry},
     message::{ClientResponseError, Message, MessageContent, ReplAction},
+    role::{CandidateData, LeaderData, Role},
     CONFIG,
 };
 
 pub type NodeId = usize;
-
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Role {
-    Follower,
-    Candidate,
-    Leader,
-}
 
 pub struct Node {
     id: NodeId,
@@ -39,13 +33,6 @@ pub struct Node {
     // Volatile state (for all servers)
     commit_index: usize,
     last_applied: usize,
-
-    // Volatile state (for leaders, reinitialized after election)
-    next_index: Vec<usize>,
-    match_index: Vec<usize>,
-
-    // Volatile state (for candidates)
-    candidate_votes: usize,
 }
 
 impl Node {
@@ -70,12 +57,8 @@ impl Node {
             voted_for: None,
             logs: Vec::new(),
 
-            candidate_votes: 0,
             commit_index: 0,
             last_applied: 0,
-
-            next_index: vec![1; node_count],
-            match_index: vec![0; node_count],
         }
     }
 
@@ -105,7 +88,7 @@ impl Node {
                         msg => {
                             if !self.simulate_crash {
                                 let should_reset_timeout = self.handle_message(msg).await
-                                    && self.role!= Role::Candidate;
+                                    && !self.role.is_candidate();
                                 if should_reset_timeout {
                                     timeout = self.generate_timeout();
                                 };
@@ -121,7 +104,7 @@ impl Node {
                         continue;
                     }
 
-                    if self.role != Role::Leader {
+                    if !self.role.is_leader() {
                         println!("Server {} received error, Timeout", self.id);
                         self.start_election().await;
                     } else {
@@ -137,7 +120,7 @@ impl Node {
         let duration = {
             let (min, max) = self.election_timeout_range;
 
-            if self.role == Role::Leader {
+            if self.role.is_leader() {
                 min / 2
             } else if max == min {
                 min
@@ -152,9 +135,8 @@ impl Node {
     }
 
     async fn start_election(&mut self) {
-        self.role = Role::Candidate;
+        self.role = Role::Candidate(CandidateData { votes: 1 });
         self.current_term += 1;
-        self.candidate_votes = 1;
         self.voted_for = Some(self.id);
         self.broadcast(MessageContent::VoteRequest {
             last_log_index: self.logs.len(),
@@ -164,38 +146,37 @@ impl Node {
     }
 
     async fn promote_leader(&mut self) {
-        self.role = Role::Leader;
+        self.role = Role::Leader(LeaderData::new(self.logs.len() + 1, self.node_count));
+
         self.leader_id = Some(self.id);
-
-        self.next_index.fill(self.logs.len() + 1);
-        self.match_index.fill(0);
-
         self.send_entries().await;
     }
 
     async fn send_entries(&self) {
-        assert!(self.role == Role::Leader);
+        if let Role::Leader(leader) = &self.role {
+            for follower in 0..self.node_count {
+                if follower == self.id {
+                    continue;
+                }
 
-        for follower in 0..self.node_count {
-            if follower == self.id {
-                continue;
-            }
-
-            let next_index = self.next_index[follower];
-            self.emit(
-                follower,
-                MessageContent::AppendEntries {
-                    prev_log_index: next_index - 1,
-                    prev_log_term: if next_index > 1 {
-                        self.logs[next_index - 2].term
-                    } else {
-                        0
+                let next_index = leader.next_index[follower];
+                self.emit(
+                    follower,
+                    MessageContent::AppendEntries {
+                        prev_log_index: next_index - 1,
+                        prev_log_term: if next_index > 1 {
+                            self.logs[next_index - 2].term
+                        } else {
+                            0
+                        },
+                        entries: self.logs[(next_index - 1)..].to_vec(),
+                        leader_commit: self.commit_index,
                     },
-                    entries: self.logs[(next_index - 1)..].to_vec(),
-                    leader_commit: self.commit_index,
-                },
-            )
-            .await;
+                )
+                .await;
+            }
+        } else {
+            unreachable!();
         }
     }
 }
@@ -227,7 +208,7 @@ impl Node {
         {
             match action.clone() {
                 Action::Set { key, value } => {
-                    if self.role != Role::Leader {
+                    if !self.role.is_leader() {
                         println!("Server {} received error, Not a leader", self.id);
                         self.emit(
                             from,
@@ -282,12 +263,15 @@ impl Node {
                 accept
             }
             MessageContent::VoteResponse(granted) => {
-                if self.current_term == term && self.role == Role::Candidate && granted {
-                    self.candidate_votes += 1;
-                    if self.candidate_votes > self.senders.len() / 2 {
-                        self.promote_leader().await;
+                if let Role::Candidate(candidate) = &mut self.role {
+                    if self.current_term == term && granted {
+                        candidate.votes += 1;
+                        if candidate.votes > self.senders.len() / 2 {
+                            self.promote_leader().await;
+                        }
                     }
                 }
+
                 false
             }
             MessageContent::AppendEntries {
@@ -330,31 +314,33 @@ impl Node {
 
                 success
             }
-            // TODO: AppendResponse
             MessageContent::AppendResponse {
                 match_index,
                 success,
             } => {
-                if success {
-                    self.match_index[from] = match_index;
-                    self.next_index[from] = match_index + 1;
+                if let Role::Leader(leader) = &mut self.role {
+                    if success {
+                        leader.match_index[from] = match_index;
+                        leader.next_index[from] = match_index + 1;
 
-                    // Recompute commit index
-                    let mut match_indices = self.match_index.clone();
-                    match_indices[self.id] = self.logs.len();
-                    match_indices.sort();
-                    let new_commit_index = match_indices[self.senders.len() / 2];
+                        // Recompute commit index
+                        let mut match_indices = leader.match_index.clone();
+                        match_indices[self.id] = self.logs.len();
+                        match_indices.sort();
+                        let new_commit_index = match_indices[self.senders.len() / 2];
 
-                    if new_commit_index > self.commit_index
-                        && self.logs[new_commit_index - 1].term == self.current_term
-                    {
-                        self.commit_index = new_commit_index;
+                        if new_commit_index > self.commit_index
+                            && self.logs[new_commit_index - 1].term == self.current_term
+                        {
+                            self.commit_index = new_commit_index;
+                        }
+                    } else {
+                        leader.next_index[from] -= 1;
                     }
+                    return true;
                 } else {
-                    self.next_index[from] -= 1;
+                    false
                 }
-
-                true
             }
             // Repl case is handled in `handle_repl`
             _ => false,

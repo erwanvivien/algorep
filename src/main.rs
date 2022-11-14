@@ -2,6 +2,7 @@ mod config;
 mod entry;
 mod message;
 mod node;
+mod role;
 
 #[cfg(test)]
 mod tests;
