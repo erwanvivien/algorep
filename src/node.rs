@@ -104,10 +104,11 @@ impl Node {
                         },
                         msg => {
                             if !self.simulate_crash {
-                                self.handle_message(msg).await;
-
-                                // Refresh timeout
-                                timeout = self.generate_timeout();
+                                let should_reset_timeout = self.handle_message(msg).await
+                                    && self.role!= Role::Candidate;
+                                if should_reset_timeout {
+                                    timeout = self.generate_timeout();
+                                };
                             }
                         }
                     }
@@ -257,7 +258,7 @@ impl Node {
     }
 
     /// Handles every message exec MessageContent::Repl
-    async fn handle_message(&mut self, message: Message) {
+    async fn handle_message(&mut self, message: Message) -> bool {
         let Message {
             term,
             from,
@@ -278,6 +279,7 @@ impl Node {
                 self.role = Role::Follower;
 
                 self.emit(from, MessageContent::VoteResponse(accept)).await;
+                accept
             }
             MessageContent::VoteResponse(granted) => {
                 if self.current_term == term && self.role == Role::Candidate && granted {
@@ -286,6 +288,7 @@ impl Node {
                         self.promote_leader().await;
                     }
                 }
+                false
             }
             MessageContent::AppendEntries {
                 entries,
@@ -324,6 +327,8 @@ impl Node {
                     },
                 )
                 .await;
+
+                success
             }
             // TODO: AppendResponse
             MessageContent::AppendResponse {
@@ -348,9 +353,11 @@ impl Node {
                 } else {
                     self.next_index[from] -= 1;
                 }
+
+                true
             }
             // Repl case is handled in `handle_repl`
-            _ => (),
+            _ => false,
         }
     }
 }
