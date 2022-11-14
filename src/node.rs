@@ -251,6 +251,7 @@ impl Node {
                         .await;
                 }
                 Action::Get { key } => todo!(),
+                Action::Delete { key } => todo!(),
             }
         }
     }

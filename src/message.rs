@@ -1,4 +1,7 @@
-use crate::{entry::{Entry, Action}, node::NodeId};
+use crate::{
+    entry::{Action, Entry},
+    node::NodeId,
+};
 
 #[allow(dead_code)]
 #[derive(Debug, PartialEq, PartialOrd, Clone)]
@@ -9,6 +12,7 @@ pub enum ReplAction {
     Shutdown,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, PartialEq, PartialOrd, Clone)]
 pub enum ClientResponseError {
     KeyNotFound,
@@ -41,7 +45,7 @@ pub enum MessageContent {
     #[allow(dead_code)]
     Repl(ReplAction),
     ClientRequest(Action),
-    ClientResponse(Result<String, ClientResponseError>)
+    ClientResponse(Result<String, ClientResponseError>),
 }
 
 #[derive(Debug, Clone)]
