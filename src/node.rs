@@ -9,6 +9,7 @@ use crate::{
     entry::{Action, Entry},
     message::{ClientResponseError, Message, MessageContent, ReplAction},
     role::{CandidateData, LeaderData, Role},
+    state::State,
     CONFIG,
 };
 
@@ -31,8 +32,7 @@ pub struct Node {
     logs: Vec<Entry>,
 
     // Volatile state (for all servers)
-    commit_index: usize,
-    last_applied: usize,
+    state: State,
 }
 
 impl Node {
@@ -57,8 +57,7 @@ impl Node {
             voted_for: None,
             logs: Vec::new(),
 
-            commit_index: 0,
-            last_applied: 0,
+            state: State::new(),
         }
     }
 
@@ -113,6 +112,8 @@ impl Node {
                     }
                 }
             }
+
+            self.state.apply_committed_entries(&self.logs);
         }
     }
 
@@ -170,7 +171,7 @@ impl Node {
                             0
                         },
                         entries: self.logs[(next_index - 1)..].to_vec(),
-                        leader_commit: self.commit_index,
+                        leader_commit: self.state.commit_index,
                     },
                 )
                 .await;
@@ -234,6 +235,7 @@ impl Node {
                 }
                 Action::Get { key } => todo!(),
                 Action::Delete { key } => todo!(),
+                Action::Append { key, value } => todo!(),
             }
         }
     }
@@ -298,8 +300,8 @@ impl Node {
                     }
                     self.logs.extend(entries);
 
-                    if leader_commit > self.commit_index {
-                        self.commit_index = min(leader_commit, self.logs.len());
+                    if leader_commit > self.state.commit_index {
+                        self.state.commit_index = min(leader_commit, self.logs.len());
                     }
                 }
 
@@ -329,10 +331,10 @@ impl Node {
                         match_indices.sort();
                         let new_commit_index = match_indices[self.senders.len() / 2];
 
-                        if new_commit_index > self.commit_index
+                        if new_commit_index > self.state.commit_index
                             && self.logs[new_commit_index - 1].term == self.current_term
                         {
-                            self.commit_index = new_commit_index;
+                            self.state.commit_index = new_commit_index;
                         }
                     } else {
                         leader.next_index[from] -= 1;
@@ -371,12 +373,21 @@ impl Node {
             from: self.id,
         };
 
+        let mut futures = Vec::with_capacity(self.senders.len() - 1);
+
         for (i, sender) in self.senders[..self.node_count].iter().enumerate() {
             if i == self.id {
                 continue;
             }
 
-            let res = sender.send(message.clone()).await;
+            let sender = sender.clone();
+            let message = message.clone();
+
+            futures.push(tokio::spawn(async move { sender.send(message).await }));
+        }
+
+        for fut in futures {
+            let res = fut.await;
             if let Err(err) = res {
                 dbg!(err);
             }
