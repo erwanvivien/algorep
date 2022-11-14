@@ -48,7 +48,7 @@ pub enum MessageContent {
     ClientResponse(Result<String, ClientResponseError>),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, PartialEq, PartialOrd, Clone)]
 pub struct Message {
     pub content: MessageContent,
     pub from: NodeId,

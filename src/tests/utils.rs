@@ -18,7 +18,11 @@ pub async fn setup_servers(
     count: usize,
     timeouts: Option<Vec<Duration>>,
     fake: Fake,
-) -> (Vec<JoinHandle<()>>, Vec<Sender<Message>>, VecDeque<Receiver<Message>>) {
+) -> (
+    Vec<JoinHandle<()>>,
+    Vec<Sender<Message>>,
+    VecDeque<Receiver<Message>>,
+) {
     assert!(timeouts
         .clone()
         .map_or_else(|| true, |durations| durations.len() == count));
@@ -112,18 +116,24 @@ pub async fn assert_vote(fake_receiver: &mut Receiver<Message>, fake_sender: &Se
             leader_commit: 0
         }
     );
-
 }
 
 pub async fn assert_no_message(receiver: &mut Receiver<Message>) {
+    assert_eq!(
+        recv_timeout(receiver, Duration::from_millis(10)).await,
+        None
+    );
+}
+
+pub async fn recv_timeout(receiver: &mut Receiver<Message>, dur: Duration) -> Option<Message> {
     let tmp = tokio::select! {
-        Some(_message) = receiver.recv() => {
-            true
+        message = receiver.recv() => {
+            message
         }
-        _ = tokio::time::sleep(Duration::from_millis(10)) => {
-            false
+        _ = tokio::time::sleep(dur) => {
+            None
         }
     };
 
-    assert!(!tmp);
+    return tmp;
 }

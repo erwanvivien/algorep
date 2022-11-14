@@ -1,9 +1,9 @@
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::entry::{Action, Entry};
 use crate::message::{Message, MessageContent};
 
-use super::utils::{assert_no_message, assert_vote, setup_servers, shutdown, Fake};
+use super::utils::{assert_no_message, assert_vote, recv_timeout, setup_servers, shutdown, Fake};
 
 #[tokio::test]
 pub async fn should_accept_vote() {
@@ -230,14 +230,17 @@ pub async fn client_server_should_receive_entry() {
     };
     assert_eq!(resp.content, expected_content);
 
-    leader.send(Message {
-        content: MessageContent::AppendResponse {
-            success: true,
-            match_index: 1,
-        },
-        term: 1,
-        from: 2,
-    }).await.unwrap();
+    leader
+        .send(Message {
+            content: MessageContent::AppendResponse {
+                success: true,
+                match_index: 1,
+            },
+            term: 1,
+            from: 2,
+        })
+        .await
+        .unwrap();
 
     let resp = server_receiver.recv().await.unwrap();
     let expected_content = MessageContent::AppendEntries {
@@ -249,5 +252,65 @@ pub async fn client_server_should_receive_entry() {
     assert_eq!(resp.content, expected_content);
 
     assert_no_message(&mut client_receiver).await;
+    shutdown(senders, threads).await
+}
+
+#[tokio::test]
+pub async fn should_timeout() {
+    let (threads, senders, mut receivers) = setup_servers(
+        1,
+        Some(vec![Duration::from_millis(100)]),
+        Fake::ClientServer,
+    )
+    .await;
+
+    let mut server_receiver = receivers.pop_front().unwrap();
+    let leader = &senders[0];
+
+    leader
+        .send(Message {
+            content: MessageContent::VoteRequest {
+                last_log_index: 0,
+                last_log_term: 0,
+            },
+            from: 1,
+            term: 5,
+        })
+        .await
+        .unwrap();
+
+    let resp = server_receiver.recv().await.unwrap();
+    assert_eq!(resp.content, MessageContent::VoteResponse(true));
+
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
+    leader
+        .send(Message {
+            content: MessageContent::AppendEntries {
+                entries: vec![],
+                prev_log_index: 0,
+                prev_log_term: 0,
+                leader_commit: 0,
+            },
+            from: 1,
+            term: 0,
+        })
+        .await
+        .unwrap();
+
+    let resp = server_receiver.recv().await.unwrap();
+    assert_eq!(
+        resp.content,
+        MessageContent::AppendResponse {
+            success: false,
+            match_index: 0,
+        }
+    );
+
+    assert!(
+        recv_timeout(&mut server_receiver, Duration::from_millis(75))
+            .await
+            .is_some()
+    );
     shutdown(senders, threads).await
 }
