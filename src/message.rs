@@ -15,6 +15,7 @@ pub enum ReplAction {
 #[allow(dead_code)]
 #[derive(Debug, PartialEq, PartialOrd, Clone)]
 pub enum ClientResponseError {
+    EntryOverridden,
     KeyNotFound,
     WrongLeader(Option<NodeId>),
 }

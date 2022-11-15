@@ -1,4 +1,4 @@
-use std::{cmp::min, pin::Pin, time::Duration};
+use std::{cmp::min, collections::VecDeque, pin::Pin, time::Duration};
 
 use tokio::{
     sync::mpsc::{Receiver, Sender},
@@ -8,12 +8,13 @@ use tokio::{
 use crate::{
     entry::{Action, Entry},
     message::{ClientResponseError, Message, MessageContent, ReplAction},
-    role::{CandidateData, LeaderData, Role},
+    role::{CandidateData, LeaderData, Role, Waiter},
     state::State,
     CONFIG,
 };
 
 pub type NodeId = usize;
+pub type ClientId = usize;
 
 pub struct Node {
     id: NodeId,
@@ -114,6 +115,7 @@ impl Node {
             }
 
             self.state.apply_committed_entries(&self.logs);
+            self.notify_waiters().await;
         }
     }
 
@@ -180,6 +182,50 @@ impl Node {
             unreachable!();
         }
     }
+
+    /// Updates current_term, leader_id and sets role to Follower
+    async fn demote_to_follower(&mut self, leader_id: Option<NodeId>, term: usize) {
+        if let Role::Leader(leader) = &mut self.role {
+            let mut waiters = VecDeque::new();
+            std::mem::swap(&mut leader.waiters, &mut waiters);
+
+            for waiter in waiters {
+                let resp = Err(ClientResponseError::WrongLeader(leader_id));
+
+                self.emit(waiter.client_id, MessageContent::ClientResponse(resp))
+                    .await;
+            }
+        }
+
+        self.current_term = term;
+        self.leader_id = leader_id;
+        self.role = Role::Follower;
+    }
+
+    async fn notify_waiters(&mut self) {
+        if let Role::Leader(leader) = &mut self.role {
+            // We need to store waiters in a separate vector to prevent borrowing issues :dead:
+            let mut ready_waiters = Vec::new();
+            while let Some(waiter) = leader.waiters.front() {
+                if waiter.index <= self.state.commit_index {
+                    ready_waiters.push(leader.waiters.pop_front().unwrap());
+                } else {
+                    break;
+                }
+            }
+
+            for waiter in ready_waiters {
+                let resp = if waiter.term == self.logs[waiter.index - 1].term {
+                    Ok(waiter.filename)
+                } else {
+                    Err(ClientResponseError::EntryOverridden)
+                };
+
+                self.emit(waiter.client_id, MessageContent::ClientResponse(resp))
+                    .await;
+            }
+        }
+    }
 }
 
 /// Message Handling part
@@ -208,8 +254,23 @@ impl Node {
         } = message
         {
             match action.clone() {
-                Action::Set { key, value } => {
-                    if !self.role.is_leader() {
+                Action::Set { key, .. } => {
+                    if let Role::Leader(leader) = &mut self.role {
+                        let entry = Entry {
+                            action,
+                            term: self.current_term,
+                        };
+                        self.logs.push(entry);
+
+                        leader.waiters.push_back(Waiter {
+                            client_id: from,
+                            term: self.current_term,
+                            index: self.logs.len(),
+                            filename: key,
+                        });
+
+                        self.send_entries().await;
+                    } else {
                         println!("Server {} received error, Not a leader", self.id);
                         self.emit(
                             from,
@@ -218,24 +279,17 @@ impl Node {
                             ))),
                         )
                         .await;
-
-                        return;
                     }
-
-                    let entry = Entry {
-                        action,
-                        term: self.current_term,
-                    };
-                    self.logs.push(entry);
-                    self.send_entries().await;
-
-                    // TODO: Queue response until entry is committed
-                    self.emit(from, MessageContent::ClientResponse(Ok(String::from(key))))
-                        .await;
                 }
-                Action::Get { key } => todo!(),
-                Action::Delete { key } => todo!(),
-                Action::Append { key, value } => todo!(),
+                Action::Get { key } => {
+                    let value = self.state.get(&key).map(|key| key.clone());
+                    self.emit(
+                        from,
+                        MessageContent::ClientResponse(value.ok_or(ClientResponseError::KeyNotFound)),
+                    ).await;
+                },
+                Action::Delete { .. } => todo!(),
+                Action::Append { .. } => todo!(),
             }
         }
     }
@@ -257,9 +311,8 @@ impl Node {
                     && last_log_term >= self.logs.last().map(|e| e.term).unwrap_or(0)
                     && last_log_index >= self.logs.len();
 
-                self.current_term = term;
                 self.voted_for = if accept { Some(from) } else { None };
-                self.role = Role::Follower;
+                self.demote_to_follower(None, term).await;
 
                 self.emit(from, MessageContent::VoteResponse(accept)).await;
                 accept
@@ -285,9 +338,7 @@ impl Node {
                 let same_term = term >= self.current_term;
 
                 if same_term {
-                    self.current_term = term;
-                    self.role = Role::Follower;
-                    self.leader_id = Some(from);
+                    self.demote_to_follower(Some(from), term).await;
                 }
 
                 let same_logs = prev_log_index == 0
@@ -295,9 +346,7 @@ impl Node {
 
                 let success = same_term && same_logs;
                 if success {
-                    if prev_log_index != 0 {
-                        self.logs.truncate(prev_log_index - 1);
-                    }
+                    self.logs.truncate(prev_log_index);
                     self.logs.extend(entries);
 
                     if leader_commit > self.state.commit_index {

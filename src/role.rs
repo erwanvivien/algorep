@@ -1,12 +1,26 @@
+use std::collections::VecDeque;
+
+use crate::node::ClientId;
+
 #[derive(Debug, PartialEq, Eq)]
 pub struct CandidateData {
     pub votes: usize,
 }
 
 #[derive(Debug, PartialEq, Eq)]
+pub struct Waiter {
+    pub client_id: ClientId,
+    pub term: usize,
+    pub index: usize,
+    pub filename: String,
+}
+
+#[derive(Debug, PartialEq, Eq)]
 pub struct LeaderData {
     pub next_index: Vec<usize>,
     pub match_index: Vec<usize>,
+
+    pub waiters: VecDeque<Waiter>,
 }
 
 impl LeaderData {
@@ -14,6 +28,8 @@ impl LeaderData {
         Self {
             next_index: vec![next_index; node_count],
             match_index: vec![0; node_count],
+
+            waiters: VecDeque::new()
         }
     }
 }

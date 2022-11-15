@@ -1,3 +1,4 @@
+use std::cmp::min;
 use std::time::{Duration, Instant};
 
 use crate::entry::{Action, Entry};
@@ -312,5 +313,130 @@ pub async fn should_timeout() {
             .await
             .is_some()
     );
+    shutdown(senders, threads).await
+}
+
+#[tokio::test]
+pub async fn should_handle_append_entries() {
+    let (threads, senders, mut receivers) =
+        setup_servers(1, Some(vec![Duration::from_millis(50)]), Fake::ClientServer).await;
+
+    let mut server_receiver = receivers.pop_front().unwrap();
+    let server_0 = &senders[0];
+    let mut client_receiver = receivers.pop_front().unwrap();
+
+    let mut previous_count = 0;
+
+    for i in 1..10 {
+        let entries = (1..=i)
+            .map(|j| Entry {
+                term: 1,
+                action: Action::Set {
+                    key: format!("key {}", i * 10 + j),
+                    value: format!("value {}", i * 10 + j),
+                },
+            })
+            .collect::<Vec<_>>();
+
+        let msg = Message {
+            content: MessageContent::AppendEntries {
+                entries,
+                prev_log_index: previous_count,
+                prev_log_term: min(previous_count, 1),
+                leader_commit: previous_count,
+            },
+            term: 1,
+            from: 1,
+        };
+
+        server_0.send(msg).await.unwrap();
+        previous_count += i;
+
+        let expected_content = MessageContent::AppendResponse {
+            success: true,
+            match_index: previous_count,
+        };
+
+        let resp = server_receiver.recv().await.unwrap();
+        assert_eq!(resp.content, expected_content);
+    }
+
+    let msg = Message {
+        content: MessageContent::AppendEntries {
+            entries: vec![],
+            prev_log_index: previous_count,
+            prev_log_term: 1,
+            leader_commit: previous_count,
+        },
+        term: 1,
+        from: 1,
+    };
+
+    // Test that match_index do not decrement
+    for _ in 1..10 {
+        let expected_content = MessageContent::AppendResponse {
+            success: true,
+            match_index: previous_count,
+        };
+
+        server_0.send(msg.clone()).await.unwrap();
+        let resp = server_receiver.recv().await.unwrap();
+        assert_eq!(resp.content, expected_content);
+    }
+
+    // Let the server timeout
+    let message = server_receiver.recv().await.unwrap();
+    assert_eq!(
+        message.content,
+        MessageContent::VoteRequest {
+            last_log_index: previous_count,
+            last_log_term: 1,
+        }
+    );
+
+    server_0
+        .send(Message {
+            content: MessageContent::VoteResponse(true),
+            term: message.term,
+            from: 1,
+        })
+        .await
+        .expect("Send should not fail");
+
+    let message = server_receiver.recv().await.unwrap();
+    assert_eq!(
+        message.content,
+        MessageContent::AppendEntries {
+            entries: Vec::new(),
+            prev_log_index: previous_count,
+            prev_log_term: 1,
+            leader_commit: previous_count
+        }
+    );
+
+    for i in 1..10 {
+        for j in 1..=i {
+            let idx = i * 10 + j;
+
+            // Send a get request to server
+            server_0
+                .send(Message {
+                    content: MessageContent::ClientRequest(Action::Get {
+                        key: String::from(format!("key {idx}")),
+                    }),
+                    term: 1,
+                    from: 2, // Client
+                })
+                .await
+                .unwrap();
+
+            let resp = client_receiver.recv().await.unwrap();
+            assert_eq!(
+                resp.content,
+                MessageContent::ClientResponse(Ok(String::from(format!("value {idx}"))))
+            );
+        }
+    }
+
     shutdown(senders, threads).await
 }

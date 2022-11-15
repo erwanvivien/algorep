@@ -44,9 +44,9 @@ impl State {
     }
 
     pub fn apply_committed_entries(&mut self, logs: &Vec<Entry>) {
-        if self.last_applied > 0 && self.commit_index > self.last_applied {
+        if self.commit_index > self.last_applied {
             // Apply
-            let entries = &logs[(self.last_applied - 1)..(self.commit_index - 1)];
+            let entries = &logs[self.last_applied..self.commit_index];
             self.process_batch(entries);
         }
     }
