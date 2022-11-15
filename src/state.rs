@@ -48,6 +48,7 @@ impl State {
             // Apply
             let entries = &logs[self.last_applied..self.commit_index];
             self.process_batch(entries);
+            self.last_applied = self.commit_index;
         }
     }
 }
