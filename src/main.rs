@@ -15,6 +15,8 @@ use config::CONFIG;
 use message::Message;
 use node::Node;
 
+use crate::message::{ClientCommand, MessageContent};
+
 #[tokio::main]
 async fn main() {
     let node_count = CONFIG.node_count;
@@ -54,9 +56,8 @@ async fn main() {
     // Remaining receivers are clients
     let _ = senders[node_count]
         .send(Message {
-            content: message::MessageContent::ClientRequest(entry::Action::Set {
-                key: "key".into(),
-                value: "value".into(),
+            content: MessageContent::ClientRequest(ClientCommand::Load {
+                filename: "file1".to_string(),
             }),
             from: node_count,
             term: 0,

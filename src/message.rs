@@ -1,7 +1,4 @@
-use crate::{
-    entry::{Action, Entry},
-    node::NodeId,
-};
+use crate::{entry::Entry, node::NodeId, state::File};
 
 #[allow(dead_code)]
 #[derive(Debug, PartialEq, PartialOrd, Clone)]
@@ -12,11 +9,28 @@ pub enum ReplAction {
     Shutdown,
 }
 
+#[derive(Debug, PartialEq, PartialOrd, Clone)]
+pub enum ClientCommand {
+    Load { filename: String },
+    List,
+    Delete { uid: String },
+    Append { uid: String, text: String },
+    Get { uid: String },
+}
+
+#[derive(Debug, Eq, PartialEq, PartialOrd, Clone)]
+pub enum ClientResponse {
+    Ok,
+    UID(String),
+    List(Vec<String>),
+    File(File),
+}
+
 #[allow(dead_code)]
 #[derive(Debug, PartialEq, PartialOrd, Clone)]
 pub enum ClientResponseError {
     EntryOverridden,
-    KeyNotFound,
+    FileNotFound,
     WrongLeader(Option<NodeId>),
 }
 
@@ -45,8 +59,8 @@ pub enum MessageContent {
     // External action
     #[allow(dead_code)]
     Repl(ReplAction),
-    ClientRequest(Action),
-    ClientResponse(Result<String, ClientResponseError>),
+    ClientRequest(ClientCommand),
+    ClientResponse(Result<ClientResponse, ClientResponseError>),
 }
 
 #[derive(Debug, PartialEq, PartialOrd, Clone)]

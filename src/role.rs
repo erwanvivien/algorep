@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 
-use crate::node::ClientId;
+use crate::{message::ClientResponse, node::ClientId};
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct CandidateData {
@@ -12,7 +12,7 @@ pub struct Waiter {
     pub client_id: ClientId,
     pub term: usize,
     pub index: usize,
-    pub filename: String,
+    pub result: ClientResponse,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -29,7 +29,7 @@ impl LeaderData {
             next_index: vec![next_index; node_count],
             match_index: vec![0; node_count],
 
-            waiters: VecDeque::new()
+            waiters: VecDeque::new(),
         }
     }
 }

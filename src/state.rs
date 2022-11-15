@@ -1,8 +1,14 @@
-use crate::entry::{Action, Entry};
+use crate::entry::{Entry, StateMutation};
 use std::collections::HashMap;
 
+#[derive(Debug, Eq, PartialEq, PartialOrd, Clone)]
+pub struct File {
+    pub filename: String,
+    pub text: String,
+}
+
 pub struct State {
-    map: HashMap<String, String>,
+    map: HashMap<String, File>,
     last_applied: usize,
     pub commit_index: usize,
 }
@@ -17,23 +23,29 @@ impl State {
         }
     }
 
-    pub fn get(&self, key: &str) -> Option<&String> {
-        self.map.get(key)
+    pub fn get(&self, uid: &str) -> Option<&File> {
+        self.map.get(uid)
     }
 
-    pub fn process(&mut self, action: &Action) {
+    pub fn process(&mut self, action: &StateMutation) {
         match action {
-            Action::Set { key, value } => {
-                self.map.insert(String::from(key), String::from(value));
+            StateMutation::Create { uid, filename } => {
+                self.map.insert(
+                    uid.clone(),
+                    File {
+                        filename: filename.clone(),
+                        text: String::new(),
+                    },
+                );
             }
-            Action::Append { key, value } => {
-                let entry = self.map.entry(String::from(key)).or_insert(String::new());
-                entry.push_str(value);
+            StateMutation::Delete { uid } => {
+                self.map.remove(uid);
             }
-            Action::Delete { key } => {
-                self.map.remove(key);
+            StateMutation::Append { uid, text } => {
+                if let Some(file) = self.map.get_mut(uid) {
+                    file.text.push_str(text);
+                }
             }
-            Action::Get { .. } => (),
         }
     }
 
@@ -56,15 +68,20 @@ impl State {
 #[cfg(test)]
 mod tests {
     use super::State;
-    use crate::entry::Action;
+    use crate::entry::StateMutation;
 
     #[test]
     fn test_append() {
         let mut state = State::new();
-        state.process(&Action::Append {
-            key: String::from("key"),
-            value: String::from("value"),
+        state.process(&StateMutation::Create {
+            uid: "1".to_string(),
+            filename: "file1".to_string(),
         });
-        assert_eq!(state.get("key"), Some(&String::from("value")));
+        state.process(&StateMutation::Append {
+            uid: "1".to_string(),
+            text: "hello".to_string(),
+        });
+
+        assert_eq!(state.get("1").unwrap().text, "hello");
     }
 }

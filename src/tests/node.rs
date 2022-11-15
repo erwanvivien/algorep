@@ -1,8 +1,9 @@
 use std::cmp::min;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
-use crate::entry::{Action, Entry};
-use crate::message::{Message, MessageContent};
+use crate::entry::{Entry, StateMutation};
+use crate::message::{ClientCommand, ClientResponse, Message, MessageContent};
+use crate::state::File;
 
 use super::utils::{assert_no_message, assert_vote, recv_timeout, setup_servers, shutdown, Fake};
 
@@ -158,16 +159,15 @@ pub async fn client_send_request() {
 
     let client_receiver = &mut receivers[0];
 
-    tokio::time::sleep(Duration::from_millis(125)).await;
+    tokio::time::sleep(Duration::from_millis(120)).await;
 
     let leader = &senders[0];
     leader
         .send(Message {
-            content: MessageContent::ClientRequest(Action::Set {
-                key: String::from("key"),
-                value: String::from("value"),
+            content: MessageContent::ClientRequest(ClientCommand::Load {
+                filename: "my_file".to_string(),
             }),
-            term: 0,
+            term: 1,
             from: 2, // client
         })
         .await
@@ -176,7 +176,7 @@ pub async fn client_send_request() {
     let resp = client_receiver.recv().await.unwrap();
     assert_eq!(
         resp.content,
-        MessageContent::ClientResponse(Ok(String::from("key")))
+        MessageContent::ClientResponse(Ok(ClientResponse::UID("1-0".to_string())))
     );
 
     assert_no_message(client_receiver).await;
@@ -200,9 +200,8 @@ pub async fn client_server_should_receive_entry() {
     let leader = &senders[0];
     leader
         .send(Message {
-            content: MessageContent::ClientRequest(Action::Set {
-                key: String::from("key"),
-                value: String::from("value"),
+            content: MessageContent::ClientRequest(ClientCommand::Load {
+                filename: "my_file".to_string(),
             }),
             term: 0,
             from: 3, // client
@@ -213,16 +212,16 @@ pub async fn client_server_should_receive_entry() {
     let resp = client_receiver.recv().await.unwrap();
     assert_eq!(
         resp.content,
-        MessageContent::ClientResponse(Ok(String::from("key")))
+        MessageContent::ClientResponse(Ok(ClientResponse::UID("1-0".to_string())))
     );
 
     let resp = server_receiver.recv().await.unwrap();
     let expected_content = MessageContent::AppendEntries {
         entries: vec![Entry {
             term: 1,
-            action: Action::Set {
-                key: String::from("key"),
-                value: String::from("value"),
+            action: StateMutation::Create {
+                uid: "1-0".to_string(),
+                filename: "my_file".to_string(),
             },
         }],
         prev_log_index: 0,
@@ -331,9 +330,9 @@ pub async fn should_handle_append_entries() {
         let entries = (1..=i)
             .map(|j| Entry {
                 term: 1,
-                action: Action::Set {
-                    key: format!("key {}", i * 10 + j),
-                    value: format!("value {}", i * 10 + j),
+                action: StateMutation::Create {
+                    uid: format!("uid {}", i * 10 + j),
+                    filename: format!("filename {}", i * 10 + j),
                 },
             })
             .collect::<Vec<_>>();
@@ -421,8 +420,8 @@ pub async fn should_handle_append_entries() {
             // Send a get request to server
             server_0
                 .send(Message {
-                    content: MessageContent::ClientRequest(Action::Get {
-                        key: String::from(format!("key {idx}")),
+                    content: MessageContent::ClientRequest(ClientCommand::Get {
+                        uid: String::from(format!("uid {idx}")),
                     }),
                     term: 1,
                     from: 2, // Client
@@ -433,7 +432,10 @@ pub async fn should_handle_append_entries() {
             let resp = client_receiver.recv().await.unwrap();
             assert_eq!(
                 resp.content,
-                MessageContent::ClientResponse(Ok(String::from(format!("value {idx}"))))
+                MessageContent::ClientResponse(Ok(ClientResponse::File(File {
+                    filename: format!("filename {idx}").to_string(),
+                    text: "".to_string(),
+                })))
             );
         }
     }

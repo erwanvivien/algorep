@@ -6,8 +6,10 @@ use tokio::{
 };
 
 use crate::{
-    entry::{Action, Entry},
-    message::{ClientResponseError, Message, MessageContent, ReplAction},
+    entry::{Entry, StateMutation},
+    message::{
+        ClientCommand, ClientResponse, ClientResponseError, Message, MessageContent, ReplAction,
+    },
     role::{CandidateData, LeaderData, Role, Waiter},
     state::State,
     CONFIG,
@@ -83,7 +85,7 @@ impl Node {
                             self.handle_repl(action)
                         },
                         Message { content: MessageContent::ClientRequest(_), .. } => {
-                            self.handle_client_action(msg).await
+                            self.handle_client_command(msg).await
                         },
                         msg => {
                             if !self.simulate_crash {
@@ -216,7 +218,7 @@ impl Node {
 
             for waiter in ready_waiters {
                 let resp = if waiter.term == self.logs[waiter.index - 1].term {
-                    Ok(waiter.filename)
+                    Ok(waiter.result)
                 } else {
                     Err(ClientResponseError::EntryOverridden)
                 };
@@ -246,30 +248,33 @@ impl Node {
         }
     }
 
-    async fn handle_client_action(&mut self, message: Message) {
+    async fn handle_client_command(&mut self, message: Message) {
         if let Message {
-            content: MessageContent::ClientRequest(action),
+            content: MessageContent::ClientRequest(command),
             from,
             ..
         } = message
         {
-            match action.clone() {
-                Action::Set { key, .. } => {
+            match command.clone() {
+                ClientCommand::Load { filename } => {
                     if let Role::Leader(leader) = &mut self.role {
-                        let entry = Entry {
-                            action,
+                        let uid =
+                            String::from(format!("{}-{}", self.current_term, self.logs.len()));
+
+                        self.logs.push(Entry {
                             term: self.current_term,
-                        };
-                        self.logs.push(entry);
+                            action: StateMutation::Create {
+                                filename,
+                                uid: uid.clone(),
+                            },
+                        });
 
                         leader.waiters.push_back(Waiter {
                             client_id: from,
                             term: self.current_term,
                             index: self.logs.len(),
-                            filename: key,
+                            result: ClientResponse::UID(uid),
                         });
-
-                        self.send_entries().await;
                     } else {
                         println!("Server {} received error, Not a leader", self.id);
                         self.emit(
@@ -281,15 +286,21 @@ impl Node {
                         .await;
                     }
                 }
-                Action::Get { key } => {
-                    let value = self.state.get(&key).map(|key| key.clone());
+                ClientCommand::List => todo!(),
+                ClientCommand::Delete { uid } => todo!(),
+                ClientCommand::Append { uid, text } => todo!(),
+                ClientCommand::Get { uid } => {
+                    // Check if leader
+                    let file = self.state.get(&uid);
                     self.emit(
                         from,
-                        MessageContent::ClientResponse(value.ok_or(ClientResponseError::KeyNotFound)),
-                    ).await;
-                },
-                Action::Delete { .. } => todo!(),
-                Action::Append { .. } => todo!(),
+                        MessageContent::ClientResponse(if let Some(file) = file {
+                            Ok(ClientResponse::File(file.clone()))
+                        } else {
+                            Err(ClientResponseError::FileNotFound)
+                        }),
+                    ).await
+                }
             }
         }
     }
