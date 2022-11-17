@@ -1,3 +1,4 @@
+mod client;
 mod config;
 mod entry;
 mod message;
@@ -15,7 +16,9 @@ use config::CONFIG;
 use message::Message;
 use node::Node;
 
-use log::info;
+use log::{error, info};
+
+use crate::client::Client;
 
 #[tokio::main]
 async fn main() {
@@ -59,6 +62,39 @@ async fn main() {
         threads.push(child);
     }
 
+    let client_id = node_count;
+    let client = Client::new(
+        client_id,
+        node_count,
+        receivers.pop_front().unwrap(),
+        senders,
+    );
+
+    // TODO: Parse REPL
+    loop {
+        let mut buffer = String::with_capacity(100);
+
+        let res = std::io::stdin().read_line(&mut buffer);
+        if let Ok(count) = res {
+            // parse line
+            if count == 0 {
+                info!("End of stream");
+                break;
+            }
+
+            if let Some(command) = Client::parse_command(&buffer) {
+                info!("Parsed command: {:?}", &command);
+                client.send_command(command).await;
+            } else {
+                error!("Failed to parse \"{}\"", &buffer);
+            };
+        } else if let Err(e) = res {
+            error!("Failed to read line: {e}");
+            break;
+        }
+    }
+
+    // TODO: SHUTDOWN
     for thread in threads.into_iter() {
         let _ = thread.await;
     }

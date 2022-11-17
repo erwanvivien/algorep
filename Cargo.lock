@@ -19,6 +19,7 @@ dependencies = [
  "log",
  "once_cell",
  "rand",
+ "regex",
  "ron",
  "serde",
  "tokio",
