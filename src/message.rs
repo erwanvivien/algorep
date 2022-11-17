@@ -1,6 +1,5 @@
-use crate::{entry::Entry, node::NodeId, state::File};
+use crate::{entry::LogEntry, node::NodeId, state::File};
 
-#[allow(dead_code)]
 #[derive(Debug, PartialEq, PartialOrd, Clone)]
 pub enum ReplAction {
     Speed(f32),
@@ -27,7 +26,6 @@ pub enum ClientResponse {
     File(File),
 }
 
-#[allow(dead_code)]
 #[derive(Debug, PartialEq, PartialOrd, Clone)]
 pub enum ClientResponseError {
     EntryOverridden,
@@ -46,7 +44,7 @@ pub enum MessageContent {
 
     // Log replication
     AppendEntries {
-        entries: Vec<Entry>,
+        entries: Vec<LogEntry>,
         // leader_id: NodeId,
         prev_log_index: usize,
         prev_log_term: usize,

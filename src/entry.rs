@@ -7,7 +7,7 @@ pub enum StateMutation {
 }
 
 #[derive(Debug, PartialEq, PartialOrd, Clone)]
-pub struct Entry {
+pub struct LogEntry {
     pub term: usize,
-    pub action: StateMutation,
+    pub mutation: StateMutation,
 }

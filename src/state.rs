@@ -1,4 +1,4 @@
-use crate::entry::{Entry, StateMutation};
+use crate::entry::{LogEntry, StateMutation};
 use std::collections::HashMap;
 
 #[derive(Debug, Eq, PartialEq, PartialOrd, Clone)]
@@ -54,13 +54,13 @@ impl VolatileState {
         }
     }
 
-    pub fn process_batch(&mut self, entries: &[Entry]) {
+    pub fn process_batch(&mut self, entries: &[LogEntry]) {
         for entry in entries {
-            self.process(&entry.action);
+            self.process(&entry.mutation);
         }
     }
 
-    pub fn apply_committed_entries(&mut self, logs: &Vec<Entry>) {
+    pub fn apply_committed_entries(&mut self, logs: &Vec<LogEntry>) {
         if self.commit_index > self.last_applied {
             // Apply
             let entries = &logs[self.last_applied..self.commit_index];

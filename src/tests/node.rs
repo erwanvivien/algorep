@@ -1,7 +1,7 @@
 use std::cmp::min;
 use std::time::Duration;
 
-use crate::entry::{Entry, StateMutation};
+use crate::entry::{LogEntry, StateMutation};
 use crate::message::{ClientCommand, ClientResponse, Message, MessageContent};
 use crate::state::File;
 
@@ -217,9 +217,9 @@ pub async fn client_server_should_receive_entry() {
 
     let resp = server_receiver.recv().await.unwrap();
     let expected_content = MessageContent::AppendEntries {
-        entries: vec![Entry {
+        entries: vec![LogEntry {
             term: 1,
-            action: StateMutation::Create {
+            mutation: StateMutation::Create {
                 uid: "1-1".to_string(),
                 filename: "my_file".to_string(),
             },
@@ -328,9 +328,9 @@ pub async fn should_handle_append_entries() {
 
     for i in 1..10 {
         let entries = (1..=i)
-            .map(|j| Entry {
+            .map(|j| LogEntry {
                 term: 1,
-                action: StateMutation::Create {
+                mutation: StateMutation::Create {
                     uid: format!("uid {}", i * 10 + j),
                     filename: format!("filename {}", i * 10 + j),
                 },

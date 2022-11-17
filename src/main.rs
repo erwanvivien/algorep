@@ -15,10 +15,16 @@ use config::CONFIG;
 use message::Message;
 use node::Node;
 
-use crate::message::{ClientCommand, MessageContent};
+use log::info;
 
 #[tokio::main]
 async fn main() {
+    env_logger::builder()
+        .filter_level(log::LevelFilter::Info)
+        .init();
+
+    info!("Starting servers...");
+
     let node_count = CONFIG.node_count;
 
     let mut threads = Vec::with_capacity(node_count);
@@ -52,20 +58,6 @@ async fn main() {
 
         threads.push(child);
     }
-
-    // Remaining receivers are clients
-    let _ = senders[node_count]
-        .send(Message {
-            content: MessageContent::ClientRequest(ClientCommand::Load {
-                filename: "file1".to_string(),
-            }),
-            from: node_count,
-            term: 0,
-        })
-        .await
-        .unwrap();
-    let tmp = receivers[0].recv().await;
-    dbg!(tmp);
 
     for thread in threads.into_iter() {
         let _ = thread.await;

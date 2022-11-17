@@ -1,12 +1,13 @@
 use std::{cmp::min, collections::VecDeque, pin::Pin, time::Duration};
 
+use log::{debug, error, info};
 use tokio::{
     sync::mpsc::{Receiver, Sender},
     time::Sleep,
 };
 
 use crate::{
-    entry::{Entry, StateMutation},
+    entry::{LogEntry, StateMutation},
     message::{
         ClientCommand, ClientResponse, ClientResponseError, Message, MessageContent, ReplAction,
     },
@@ -32,7 +33,7 @@ pub struct Node {
     role: Role,
     current_term: usize,
     voted_for: Option<NodeId>,
-    logs: Vec<Entry>,
+    logs: Vec<LogEntry>,
 
     // Volatile state (for all servers)
     state: VolatileState,
@@ -74,7 +75,7 @@ impl Node {
 
             tokio::select! {
                 msg = self.receiver.recv() => {
-                    println!("Server {} received {:?}", self.id, msg);
+                    debug!("Server {} received {:?}", self.id, msg);
                     if msg.is_none() {
                         continue;
                     }
@@ -107,10 +108,10 @@ impl Node {
                     }
 
                     if !self.role.is_leader() {
-                        println!("Server {} received error, Timeout", self.id);
+                        debug!("Server {} received error, Timeout", self.id);
                         self.start_election().await;
                     } else {
-                        println!("Server {} sending heartbeat", self.id);
+                        debug!("Server {} sending heartbeat", self.id);
                         self.send_entries().await;
                     }
                 }
@@ -140,6 +141,7 @@ impl Node {
     }
 
     async fn start_election(&mut self) {
+        info!("Server {} started election...", self.id);
         self.role = Role::Candidate(CandidateData { votes: 1 });
         self.current_term += 1;
         self.voted_for = Some(self.id);
@@ -151,6 +153,7 @@ impl Node {
     }
 
     async fn promote_leader(&mut self) {
+        info!("Server {} is now leader !", self.id);
         self.role = Role::Leader(LeaderData::new(self.logs.len() + 1, self.node_count));
 
         self.leader_id = Some(self.id);
@@ -188,6 +191,8 @@ impl Node {
     /// Updates current_term, leader_id and sets role to Follower
     async fn demote_to_follower(&mut self, leader_id: Option<NodeId>, term: usize) {
         if let Role::Leader(leader) = &mut self.role {
+            info!("Server {} is now a peasant follower :'(", self.id);
+
             let mut waiters = VecDeque::new();
             std::mem::swap(&mut leader.waiters, &mut waiters);
 
@@ -202,6 +207,14 @@ impl Node {
         self.current_term = term;
         self.leader_id = leader_id;
         self.role = Role::Follower;
+    }
+
+    fn add_log(&mut self, mutation: StateMutation) {
+        info!("Leader {} adding log {} with mutation {:?}", self.id, self.logs.len() + 1, &mutation);
+        self.logs.push(LogEntry {
+            term: self.current_term,
+            mutation,
+        })
     }
 
     async fn notify_waiters(&mut self) {
@@ -223,6 +236,8 @@ impl Node {
                     Err(ClientResponseError::EntryOverridden)
                 };
 
+                // We subtract node_count because our client index are after the servers
+                info!("Server {} sending response to client {}", self.id, waiter.client_id - self.node_count);
                 self.emit(waiter.client_id, MessageContent::ClientResponse(resp))
                     .await;
             }
@@ -264,20 +279,14 @@ impl Node {
                         let uid =
                             format!("{}-{}", self.current_term, self.logs.len() + 1).to_string();
 
-                        self.logs.push(Entry {
-                            term: self.current_term,
-                            action: StateMutation::Create {
-                                filename,
-                                uid: uid.clone(),
-                            },
-                        });
-
                         leader.waiters.push_back(Waiter {
                             client_id: from,
                             term: self.current_term,
-                            index: self.logs.len(),
-                            result: ClientResponse::UID(uid),
+                            index: self.logs.len() + 1,
+                            result: ClientResponse::UID(uid.clone()),
                         });
+
+                        self.add_log(StateMutation::Create { filename, uid });
                     }
                     ClientCommand::List => {
                         let files = self.state.list_uid();
@@ -289,30 +298,24 @@ impl Node {
                         .await;
                     }
                     ClientCommand::Delete { uid } => {
-                        self.logs.push(Entry {
-                            term: self.current_term,
-                            action: StateMutation::Delete { uid },
-                        });
-
                         leader.waiters.push_back(Waiter {
                             client_id: from,
                             term: self.current_term,
-                            index: self.logs.len(),
+                            index: self.logs.len() + 1,
                             result: ClientResponse::Ok,
                         });
+
+                        self.add_log(StateMutation::Delete { uid });
                     }
                     ClientCommand::Append { uid, text } => {
-                        self.logs.push(Entry {
-                            term: self.current_term,
-                            action: StateMutation::Append { uid, text },
-                        });
-
                         leader.waiters.push_back(Waiter {
                             client_id: from,
                             term: self.current_term,
-                            index: self.logs.len(),
+                            index: self.logs.len() + 1,
                             result: ClientResponse::Ok,
                         });
+
+                        self.add_log(StateMutation::Append { uid, text });
                     }
                     ClientCommand::Get { uid } => {
                         let file = self.state.get(&uid);
@@ -329,7 +332,7 @@ impl Node {
                     }
                 }
             } else {
-                println!("Server {} received error, Not a leader", self.id);
+                debug!("Server {} received error, Not a leader", self.id);
                 self.emit(
                     from,
                     MessageContent::ClientResponse(Err(ClientResponseError::WrongLeader(
@@ -459,11 +462,12 @@ impl Node {
             .await;
 
         if let Err(err) = res {
-            dbg!(err);
+            error!("{err}");
         }
     }
 
     async fn broadcast(&self, content: MessageContent) {
+        // TODO: Fix parallel futures
         let message = Message {
             content,
             term: self.current_term,
@@ -486,7 +490,7 @@ impl Node {
         for fut in futures {
             let res = fut.await;
             if let Err(err) = res {
-                dbg!(err);
+                error!("{err}");
             }
         }
     }
