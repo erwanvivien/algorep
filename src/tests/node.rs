@@ -176,7 +176,7 @@ pub async fn client_send_request() {
     let resp = client_receiver.recv().await.unwrap();
     assert_eq!(
         resp.content,
-        MessageContent::ClientResponse(Ok(ClientResponse::UID("1-0".to_string())))
+        MessageContent::ClientResponse(Ok(ClientResponse::UID("1-1".to_string())))
     );
 
     assert_no_message(client_receiver).await;
@@ -212,7 +212,7 @@ pub async fn client_server_should_receive_entry() {
     let resp = client_receiver.recv().await.unwrap();
     assert_eq!(
         resp.content,
-        MessageContent::ClientResponse(Ok(ClientResponse::UID("1-0".to_string())))
+        MessageContent::ClientResponse(Ok(ClientResponse::UID("1-1".to_string())))
     );
 
     let resp = server_receiver.recv().await.unwrap();
@@ -220,7 +220,7 @@ pub async fn client_server_should_receive_entry() {
         entries: vec![Entry {
             term: 1,
             action: StateMutation::Create {
-                uid: "1-0".to_string(),
+                uid: "1-1".to_string(),
                 filename: "my_file".to_string(),
             },
         }],
@@ -415,13 +415,13 @@ pub async fn should_handle_append_entries() {
 
     for i in 1..10 {
         for j in 1..=i {
-            let idx = i * 10 + j;
+            let uid = i * 10 + j;
 
             // Send a get request to server
             server_0
                 .send(Message {
                     content: MessageContent::ClientRequest(ClientCommand::Get {
-                        uid: String::from(format!("uid {idx}")),
+                        uid: String::from(format!("uid {}", uid)),
                     }),
                     term: 1,
                     from: 2, // Client
@@ -433,7 +433,7 @@ pub async fn should_handle_append_entries() {
             assert_eq!(
                 resp.content,
                 MessageContent::ClientResponse(Ok(ClientResponse::File(File {
-                    filename: format!("filename {idx}").to_string(),
+                    filename: format!("filename {}", uid).to_string(),
                     text: "".to_string(),
                 })))
             );

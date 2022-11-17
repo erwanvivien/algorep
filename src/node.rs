@@ -247,7 +247,7 @@ impl Node {
             // ReplAction::Recovery => {
             //     self.state = VolatileState::new();
             // }
-            _ => todo!()
+            _ => todo!(),
         }
     }
 
@@ -261,8 +261,8 @@ impl Node {
             if let Role::Leader(leader) = &mut self.role {
                 match command.clone() {
                     ClientCommand::Load { filename } => {
-                        // TODO: use self.logs.len + 1
-                        let uid = format!("{}-{}", self.current_term, self.logs.len()).to_string();
+                        let uid =
+                            format!("{}-{}", self.current_term, self.logs.len() + 1).to_string();
 
                         self.logs.push(Entry {
                             term: self.current_term,
