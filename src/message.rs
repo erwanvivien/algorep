@@ -7,6 +7,7 @@ pub enum ReplAction {
     Crash,
     Start,
     Shutdown,
+    Recovery,
 }
 
 #[derive(Debug, PartialEq, PartialOrd, Clone)]

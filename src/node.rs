@@ -11,7 +11,7 @@ use crate::{
         ClientCommand, ClientResponse, ClientResponseError, Message, MessageContent, ReplAction,
     },
     role::{CandidateData, LeaderData, Role, Waiter},
-    state::State,
+    state::VolatileState,
     CONFIG,
 };
 
@@ -35,7 +35,7 @@ pub struct Node {
     logs: Vec<Entry>,
 
     // Volatile state (for all servers)
-    state: State,
+    state: VolatileState,
 }
 
 impl Node {
@@ -60,7 +60,7 @@ impl Node {
             voted_for: None,
             logs: Vec::new(),
 
-            state: State::new(),
+            state: VolatileState::new(),
         }
     }
 
@@ -244,7 +244,10 @@ impl Node {
             ReplAction::Shutdown => {
                 self.shutdown_requested = true;
             }
-            _ => {}
+            // ReplAction::Recovery => {
+            //     self.state = VolatileState::new();
+            // }
+            _ => todo!()
         }
     }
 
@@ -255,11 +258,11 @@ impl Node {
             ..
         } = message
         {
-            match command.clone() {
-                ClientCommand::Load { filename } => {
-                    if let Role::Leader(leader) = &mut self.role {
-                        let uid =
-                            String::from(format!("{}-{}", self.current_term, self.logs.len()));
+            if let Role::Leader(leader) = &mut self.role {
+                match command.clone() {
+                    ClientCommand::Load { filename } => {
+                        // TODO: use self.logs.len + 1
+                        let uid = format!("{}-{}", self.current_term, self.logs.len()).to_string();
 
                         self.logs.push(Entry {
                             term: self.current_term,
@@ -275,32 +278,65 @@ impl Node {
                             index: self.logs.len(),
                             result: ClientResponse::UID(uid),
                         });
-                    } else {
-                        println!("Server {} received error, Not a leader", self.id);
+                    }
+                    ClientCommand::List => {
+                        let files = self.state.list_uid();
+
                         self.emit(
                             from,
-                            MessageContent::ClientResponse(Err(ClientResponseError::WrongLeader(
-                                self.leader_id,
-                            ))),
+                            MessageContent::ClientResponse(Ok(ClientResponse::List(files))),
                         )
                         .await;
                     }
+                    ClientCommand::Delete { uid } => {
+                        self.logs.push(Entry {
+                            term: self.current_term,
+                            action: StateMutation::Delete { uid },
+                        });
+
+                        leader.waiters.push_back(Waiter {
+                            client_id: from,
+                            term: self.current_term,
+                            index: self.logs.len(),
+                            result: ClientResponse::Ok,
+                        });
+                    }
+                    ClientCommand::Append { uid, text } => {
+                        self.logs.push(Entry {
+                            term: self.current_term,
+                            action: StateMutation::Append { uid, text },
+                        });
+
+                        leader.waiters.push_back(Waiter {
+                            client_id: from,
+                            term: self.current_term,
+                            index: self.logs.len(),
+                            result: ClientResponse::Ok,
+                        });
+                    }
+                    ClientCommand::Get { uid } => {
+                        let file = self.state.get(&uid);
+
+                        self.emit(
+                            from,
+                            MessageContent::ClientResponse(if let Some(file) = file {
+                                Ok(ClientResponse::File(file.clone()))
+                            } else {
+                                Err(ClientResponseError::FileNotFound)
+                            }),
+                        )
+                        .await
+                    }
                 }
-                ClientCommand::List => todo!(),
-                ClientCommand::Delete { uid } => todo!(),
-                ClientCommand::Append { uid, text } => todo!(),
-                ClientCommand::Get { uid } => {
-                    // Check if leader
-                    let file = self.state.get(&uid);
-                    self.emit(
-                        from,
-                        MessageContent::ClientResponse(if let Some(file) = file {
-                            Ok(ClientResponse::File(file.clone()))
-                        } else {
-                            Err(ClientResponseError::FileNotFound)
-                        }),
-                    ).await
-                }
+            } else {
+                println!("Server {} received error, Not a leader", self.id);
+                self.emit(
+                    from,
+                    MessageContent::ClientResponse(Err(ClientResponseError::WrongLeader(
+                        self.leader_id,
+                    ))),
+                )
+                .await;
             }
         }
     }
@@ -398,6 +434,7 @@ impl Node {
                         }
                     } else {
                         leader.next_index[from] -= 1;
+                        // TODO: Send again immediately
                     }
                     return true;
                 } else {

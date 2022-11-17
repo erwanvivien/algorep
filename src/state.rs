@@ -7,30 +7,34 @@ pub struct File {
     pub text: String,
 }
 
-pub struct State {
-    map: HashMap<String, File>,
+pub struct VolatileState {
+    storage: HashMap<String, File>,
     last_applied: usize,
     pub commit_index: usize,
 }
 
 #[allow(dead_code)]
-impl State {
+impl VolatileState {
     pub fn new() -> Self {
-        State {
-            map: HashMap::new(),
+        VolatileState {
+            storage: HashMap::new(),
             commit_index: 0,
             last_applied: 0,
         }
     }
 
     pub fn get(&self, uid: &str) -> Option<&File> {
-        self.map.get(uid)
+        self.storage.get(uid)
+    }
+
+    pub fn list_uid(&self) -> Vec<String> {
+        self.storage.keys().map(|s| s.clone()).collect()
     }
 
     pub fn process(&mut self, action: &StateMutation) {
         match action {
             StateMutation::Create { uid, filename } => {
-                self.map.insert(
+                self.storage.insert(
                     uid.clone(),
                     File {
                         filename: filename.clone(),
@@ -39,11 +43,12 @@ impl State {
                 );
             }
             StateMutation::Delete { uid } => {
-                self.map.remove(uid);
+                self.storage.remove(uid);
             }
             StateMutation::Append { uid, text } => {
-                if let Some(file) = self.map.get_mut(uid) {
+                if let Some(file) = self.storage.get_mut(uid) {
                     file.text.push_str(text);
+                    file.text.push('\n');
                 }
             }
         }
@@ -67,12 +72,12 @@ impl State {
 
 #[cfg(test)]
 mod tests {
-    use super::State;
+    use super::VolatileState;
     use crate::entry::StateMutation;
 
     #[test]
     fn test_append() {
-        let mut state = State::new();
+        let mut state = VolatileState::new();
         state.process(&StateMutation::Create {
             uid: "1".to_string(),
             filename: "file1".to_string(),
@@ -82,6 +87,6 @@ mod tests {
             text: "hello".to_string(),
         });
 
-        assert_eq!(state.get("1").unwrap().text, "hello");
+        assert_eq!(state.get("1").unwrap().text, "hello\n");
     }
 }
