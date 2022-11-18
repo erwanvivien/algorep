@@ -295,9 +295,21 @@ impl Node {
                 println!("  Last applied: {}", self.state.last_applied);
                 println!("====================");
             }
-            // ReplAction::Recovery => {
-            //     self.state = VolatileState::new();
-            // }
+            ReplAction::Recovery => {
+                info!("Server {} is recovering", self.id);
+
+                self.role = Role::Follower;
+                self.current_term = 0;
+                self.voted_for = None;
+                self.logs = Vec::new();
+
+                self.leader_id = None;
+
+                self.state = VolatileState::new();
+
+                self.emit(self.id, MessageContent::Repl(ReplAction::Display))
+                    .await;
+            }
             _ => todo!(),
         }
     }
