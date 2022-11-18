@@ -6,7 +6,6 @@ use std::sync::{
 use tokio::sync::mpsc::{Receiver, Sender};
 
 use crate::message::{ClientCommand, ClientResponseError, Message, MessageContent};
-use regex::Regex;
 
 use log::{error, info};
 
@@ -62,8 +61,7 @@ impl Client {
                         if let ClientResponseError::WrongLeader(Some(new_leader_id)) = err {
                             info!("Client updated leader: {:?}", new_leader_id);
                             leader_id.store(new_leader_id, Relaxed);
-                        }
-                        else {
+                        } else {
                             error!("Error: {:?}", err);
                         }
                     }
@@ -71,55 +69,5 @@ impl Client {
                 }
             }
         });
-    }
-
-    pub fn parse_command(line: &str) -> Option<ClientCommand> {
-        let re = Regex::new(r"^(?P<command>\w+)\s*(?P<args>.*)\s*$").unwrap();
-        let caps = re.captures(line)?;
-        let command = caps.name("command")?.as_str();
-        let args = caps.name("args")?.as_str();
-
-        match command.to_lowercase().as_str() {
-            "load" => {
-                let re = Regex::new(r"^(?P<filename>\w+)").unwrap();
-                let caps = re.captures(args)?;
-                let filename = caps.name("filename")?.as_str();
-
-                Some(ClientCommand::Load {
-                    filename: filename.to_string(),
-                })
-            }
-            "append" => {
-                let re = Regex::new(r"^(?P<uid>[^\s]+)\s*(?P<text>.*)$").unwrap();
-                let caps = re.captures(args)?;
-                let uid = caps.name("uid")?.as_str();
-                let text = caps.name("text")?.as_str();
-
-                Some(ClientCommand::Append {
-                    uid: uid.to_string(),
-                    text: text.to_string(),
-                })
-            }
-            "delete" => {
-                let re = Regex::new(r"^(?P<uid>\w+)$").unwrap();
-                let caps = re.captures(args)?;
-                let uid = caps.name("uid")?.as_str();
-
-                Some(ClientCommand::Delete {
-                    uid: uid.to_string(),
-                })
-            }
-            "list" => Some(ClientCommand::List),
-            "get" => {
-                let re = Regex::new(r"^(?P<uid>[^\s]+)$").unwrap();
-                let caps = re.captures(args)?;
-                let uid = caps.name("uid")?.as_str();
-
-                Some(ClientCommand::Get {
-                    uid: uid.to_string(),
-                })
-            }
-            _ => None,
-        }
     }
 }

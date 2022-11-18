@@ -18,7 +18,7 @@ use node::Node;
 
 use log::{error, info};
 
-use crate::client::Client;
+use crate::{client::Client, message::ClientCommand};
 
 #[tokio::main]
 async fn main() {
@@ -82,7 +82,7 @@ async fn main() {
                 break;
             }
 
-            if let Some(command) = Client::parse_command(&buffer) {
+            if let Some(command) = ClientCommand::parse_command(&buffer) {
                 info!("Parsed command: {:?}", &command);
                 client.send_command(command).await;
             } else {
