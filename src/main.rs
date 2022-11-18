@@ -18,7 +18,10 @@ use node::Node;
 
 use log::{error, info};
 
-use crate::{client::Client, message::ClientCommand};
+use crate::{
+    client::Client,
+    message::{ClientCommand, ReplAction},
+};
 
 #[tokio::main]
 async fn main() {
@@ -67,7 +70,7 @@ async fn main() {
         client_id,
         node_count,
         receivers.pop_front().unwrap(),
-        senders,
+        senders.clone(),
     );
 
     // TODO: Parse REPL
@@ -82,7 +85,16 @@ async fn main() {
                 break;
             }
 
-            if let Some(command) = ClientCommand::parse_command(&buffer) {
+            if let Some((id, repl)) = ReplAction::parse_action(&buffer) {
+                senders[id]
+                    .send(Message {
+                        content: message::MessageContent::Repl(repl),
+                        from: usize::MAX,
+                        term: usize::MAX,
+                    })
+                    .await
+                    .unwrap();
+            } else if let Some(command) = ClientCommand::parse_command(&buffer) {
                 info!("Parsed command: {:?}", &command);
                 client.send_command(command).await;
             } else {

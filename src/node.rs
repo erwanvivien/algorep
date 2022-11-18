@@ -210,7 +210,12 @@ impl Node {
     }
 
     fn add_log(&mut self, mutation: StateMutation) {
-        info!("Leader {} adding log {} with mutation {:?}", self.id, self.logs.len() + 1, &mutation);
+        info!(
+            "Leader {} adding log {} with mutation {:?}",
+            self.id,
+            self.logs.len() + 1,
+            &mutation
+        );
         self.logs.push(LogEntry {
             term: self.current_term,
             mutation,
@@ -237,7 +242,11 @@ impl Node {
                 };
 
                 // We subtract node_count because our client index are after the servers
-                info!("Server {} sending response to client {}", self.id, waiter.client_id - self.node_count);
+                info!(
+                    "Server {} sending response to client {}",
+                    self.id,
+                    waiter.client_id - self.node_count
+                );
                 self.emit(waiter.client_id, MessageContent::ClientResponse(resp))
                     .await;
             }
@@ -252,12 +261,17 @@ impl Node {
         match action {
             ReplAction::Crash => {
                 self.simulate_crash = true;
+
+                info!("Server {} is crashed, ignoring messages", self.id);
             }
             ReplAction::Start => {
                 self.simulate_crash = false;
+
+                info!("Server {} is up, resuming message reception", self.id);
             }
             ReplAction::Shutdown => {
                 self.shutdown_requested = true;
+                info!("Server {} is shuting down", self.id);
             }
             // ReplAction::Recovery => {
             //     self.state = VolatileState::new();

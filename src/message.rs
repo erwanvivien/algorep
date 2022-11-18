@@ -11,6 +11,36 @@ pub enum ReplAction {
     Recovery,
 }
 
+impl ReplAction {
+    pub fn parse_action(action: &str) -> Option<(NodeId, ReplAction)> {
+        let action = action.to_lowercase();
+
+        let repl_id = Regex::new(r"^repl (?P<id>\d+)").unwrap();
+        if !repl_id.is_match(&action) {
+            return None;
+        }
+
+        let id_capture = repl_id.captures(&action)?;
+        let id = id_capture.name("id")?.as_str().parse::<NodeId>().ok()?;
+
+        let speed_re = Regex::new(r"speed (?P<speed>\d+\.?\d*)").unwrap();
+        if let Some(caps) = speed_re.captures(&action) {
+            let speed = caps.name("speed")?.as_str().parse::<f32>().ok()?;
+            Some((id, ReplAction::Speed(speed)))
+        } else if action.contains("crash") {
+            Some((id, ReplAction::Crash))
+        } else if action.contains("start") {
+            Some((id, ReplAction::Start))
+        } else if action.contains("shutdown") {
+            Some((id, ReplAction::Shutdown))
+        } else if action.contains("recovery") {
+            Some((id, ReplAction::Recovery))
+        } else {
+            None
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, PartialOrd, Clone)]
 pub enum ClientCommand {
     Load { filename: String },
