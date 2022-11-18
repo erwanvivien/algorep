@@ -9,6 +9,9 @@ pub enum ReplAction {
     Start,
     Shutdown,
     Recovery,
+
+    // Personnal commands
+    Display,
 }
 
 impl ReplAction {
@@ -35,6 +38,8 @@ impl ReplAction {
             Some((id, ReplAction::Shutdown))
         } else if action.contains("recovery") {
             Some((id, ReplAction::Recovery))
+        } else if action.contains("display") {
+            Some((id, ReplAction::Display))
         } else {
             None
         }

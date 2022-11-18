@@ -73,6 +73,8 @@ async fn main() {
         senders.clone(),
     );
 
+    tokio::time::sleep(CONFIG.election_timeout_range().1).await;
+
     // TODO: Parse REPL
     loop {
         let mut buffer = String::with_capacity(100);

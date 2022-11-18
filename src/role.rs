@@ -54,4 +54,12 @@ impl Role {
     pub fn is_leader(&self) -> bool {
         matches!(self, Role::Leader(_))
     }
+
+    pub fn to_string(&self) -> &'static str {
+        match self {
+            Role::Follower => "Follower",
+            Role::Candidate(_) => "Candidate",
+            Role::Leader(_) => "Leader",
+        }
+    }
 }

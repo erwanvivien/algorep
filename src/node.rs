@@ -273,6 +273,26 @@ impl Node {
                 self.shutdown_requested = true;
                 info!("Server {} is shuting down", self.id);
             }
+            ReplAction::Display => {
+                info!("Server {} is displaying state", self.id);
+                println!("====================");
+                println!("Server {} state:", self.id);
+                println!("Current term: {}", self.current_term);
+                println!("Voted for: {:?}", self.voted_for);
+                println!("Leader id: {:?}", self.leader_id);
+                println!("Role: {}", self.role.to_string());
+                if let Role::Leader(leader) = &self.role {
+                    println!("  Next index: {:?}", leader.next_index);
+                    println!("  Match index: {:?}", leader.match_index);
+                } else if let Role::Candidate(candidate) = &self.role {
+                    println!("  Votes: {}", candidate.votes);
+                }
+                println!("Logs: {:?}", self.logs.len());
+                println!("State:");
+                println!("  Commit index: {}", self.state.commit_index);
+                println!("  Last applied: {}", self.state.last_applied);
+                println!("====================");
+            }
             // ReplAction::Recovery => {
             //     self.state = VolatileState::new();
             // }

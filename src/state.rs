@@ -7,9 +7,10 @@ pub struct File {
     pub text: String,
 }
 
+#[derive(Debug)]
 pub struct VolatileState {
     storage: HashMap<String, File>,
-    last_applied: usize,
+    pub last_applied: usize,
     pub commit_index: usize,
 }
 
