@@ -83,7 +83,7 @@ impl Node {
                     let msg = msg.unwrap();
                     match msg {
                         Message { content: MessageContent::Repl(action), ..} => {
-                            self.handle_repl(action)
+                            self.handle_repl(action).await
                         },
                         Message { content: MessageContent::ClientRequest(_), .. } => {
                             self.handle_client_command(msg).await
@@ -257,21 +257,23 @@ impl Node {
 /// Message Handling part
 impl Node {
     /// Handles only MessageContent::Repl
-    fn handle_repl(&mut self, action: ReplAction) {
+    async fn handle_repl(&mut self, action: ReplAction) {
         match action {
             ReplAction::Crash => {
-                self.simulate_crash = true;
-
                 info!("Server {} is crashed, ignoring messages", self.id);
+                self.simulate_crash = true;
             }
             ReplAction::Start => {
-                self.simulate_crash = false;
-
                 info!("Server {} is up, resuming message reception", self.id);
+                self.simulate_crash = false;
             }
             ReplAction::Shutdown => {
-                self.shutdown_requested = true;
                 info!("Server {} is shuting down", self.id);
+                self.shutdown_requested = true;
+            }
+            ReplAction::Timeout => {
+                info!("Server {} is timed-out, becoming leader", self.id);
+                self.promote_leader().await;
             }
             ReplAction::Display => {
                 info!("Server {} is displaying state", self.id);
