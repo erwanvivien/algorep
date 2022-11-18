@@ -109,7 +109,18 @@ async fn main() {
         }
     }
 
-    // TODO: SHUTDOWN
+    for senders in senders {
+        while let Err(_) = senders
+            .send(Message {
+                content: message::MessageContent::Repl(ReplAction::Shutdown),
+                from: usize::MAX,
+                term: usize::MAX,
+            })
+            .await
+        {
+            error!("Failed to send shutdown message");
+        }
+    }
     for thread in threads.into_iter() {
         let _ = thread.await;
     }
