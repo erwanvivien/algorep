@@ -78,6 +78,7 @@ async fn main() {
     // TODO: Parse REPL
     loop {
         let mut buffer = String::with_capacity(100);
+        tokio::time::sleep(CONFIG.election_timeout_range().1 * 2).await;
 
         let res = std::io::stdin().read_line(&mut buffer);
         if let Ok(count) = res {
