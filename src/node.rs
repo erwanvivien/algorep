@@ -1,4 +1,11 @@
-use std::{cmp::min, collections::VecDeque, pin::Pin, time::Duration};
+use std::{
+    cmp::min,
+    collections::VecDeque,
+    fs::{File, OpenOptions},
+    io::Write,
+    pin::Pin,
+    time::Duration,
+};
 
 use log::{debug, error, info};
 use tokio::{
@@ -449,6 +456,18 @@ impl Node {
 
                     if leader_commit > self.state.commit_index {
                         self.state.commit_index = min(leader_commit, self.logs.len());
+
+                        let mut file = OpenOptions::new()
+                            .write(true)
+                            .create(true)
+                            .truncate(true)
+                            .open(format!("node_{}.log", self.id));
+
+                        if let Ok(file) = &mut file {
+                            for entry in &self.logs {
+                                serde_cbor::to_writer(&mut *file, entry).unwrap();
+                            }
+                        }
                     }
                 }
 
@@ -476,12 +495,32 @@ impl Node {
                         let mut match_indices = leader.match_index.clone();
                         match_indices[self.id] = self.logs.len();
                         match_indices.sort();
-                        let new_commit_index = match_indices[self.senders.len() / 2];
+                        let new_commit_index = match_indices[self.node_count / 2];
+
+                        if self.state.commit_index != new_commit_index {
+                            dbg!(self.state.commit_index, new_commit_index);
+                            dbg!(match_indices);
+                        }
 
                         if new_commit_index > self.state.commit_index
                             && self.logs[new_commit_index - 1].term == self.current_term
                         {
+                            leader.match_index[self.id] = match_index;
+                            leader.next_index[self.id] = match_index + 1;
+
                             self.state.commit_index = new_commit_index;
+
+                            let mut file = OpenOptions::new()
+                                .write(true)
+                                .create(true)
+                                .truncate(true)
+                                .open(format!("node_{}.log", self.id));
+
+                            if let Ok(file) = &mut file {
+                                for entry in &self.logs {
+                                    serde_cbor::to_writer(&mut *file, entry).unwrap();
+                                }
+                            }
                         }
                     } else {
                         leader.next_index[from] -= 1;
@@ -493,7 +532,9 @@ impl Node {
                 }
             }
             // Repl case is handled in `handle_repl`
-            _ => false,
+            MessageContent::ClientRequest(_)
+            | MessageContent::ClientResponse(_)
+            | MessageContent::Repl(_) => false,
         }
     }
 }

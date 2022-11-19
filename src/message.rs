@@ -10,6 +10,7 @@ pub enum ReplAction {
     Shutdown,
     Recovery,
     Timeout,
+    Snapshot,
 
     // Personnal commands
     Display,
