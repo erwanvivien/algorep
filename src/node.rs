@@ -1,11 +1,4 @@
-use std::{
-    cmp::min,
-    collections::VecDeque,
-    fs::{File, OpenOptions},
-    io::Write,
-    pin::Pin,
-    time::Duration,
-};
+use std::{cmp::min, collections::VecDeque, fs::OpenOptions, pin::Pin, time::Duration};
 
 use log::{debug, error, info};
 use tokio::{
