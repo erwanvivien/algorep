@@ -24,9 +24,9 @@ impl ConfigTime {
     }
 }
 
-impl Into<Duration> for ConfigTime {
-    fn into(self) -> Duration {
-        self.to_duration()
+impl From<ConfigTime> for Duration {
+    fn from(time: ConfigTime) -> Self {
+        time.to_duration()
     }
 }
 

@@ -49,7 +49,7 @@ impl ReplAction {
     }
 }
 
-#[derive(Debug, PartialEq, PartialOrd, Clone)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Clone)]
 pub enum ClientCommand {
     Load { filename: String },
     List,
@@ -118,7 +118,7 @@ pub enum ClientResponse {
     File(File),
 }
 
-#[derive(Debug, PartialEq, PartialOrd, Clone)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Clone)]
 pub enum ClientResponseError {
     EntryOverridden,
     FileNotFound,

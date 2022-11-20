@@ -416,7 +416,7 @@ pub async fn should_handle_append_entries() {
             server_0
                 .send(Message {
                     content: MessageContent::ClientRequest(ClientCommand::Get {
-                        uid: String::from(format!("uid {}", uid)),
+                        uid: format!("uid {}", uid),
                     }),
                     term: 1,
                     from: 2, // Client
@@ -429,7 +429,7 @@ pub async fn should_handle_append_entries() {
                 resp.content,
                 MessageContent::ClientResponse(Ok(ClientResponse::File(
                     crate::node::volatile_state::File {
-                        filename: format!("filename {}", uid).to_string(),
+                        filename: format!("filename {}", uid),
                         text: "".to_string(),
                     }
                 )))

@@ -67,12 +67,12 @@ pub async fn setup_servers(
         threads.push(child);
     }
 
-    return (threads, senders, receivers);
+    (threads, senders, receivers)
 }
 
 pub async fn shutdown(senders: Vec<Sender<Message>>, threads: Vec<JoinHandle<()>>) {
     for sender in senders {
-        let _ = sender
+        sender
             .send(Message {
                 content: MessageContent::Repl(Shutdown),
                 term: usize::MAX,
@@ -135,5 +135,5 @@ pub async fn recv_timeout(receiver: &mut Receiver<Message>, dur: Duration) -> Op
         }
     };
 
-    return tmp;
+    tmp
 }

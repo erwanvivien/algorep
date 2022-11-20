@@ -128,7 +128,7 @@ impl Node {
                         leader.next_index[from] -= 1;
                         // TODO: Send again immediately
                     }
-                    return true;
+                    true
                 } else {
                     false
                 }

@@ -28,7 +28,7 @@ impl VolatileState {
     }
 
     pub fn list_uid(&self) -> Vec<String> {
-        self.storage.keys().map(|s| s.clone()).collect()
+        self.storage.keys().cloned().collect()
     }
 
     pub fn process(&mut self, action: &StateMutation) {
@@ -60,7 +60,7 @@ impl VolatileState {
         }
     }
 
-    pub fn apply_committed_entries(&mut self, logs: &Vec<LogEntry>) {
+    pub fn apply_committed_entries(&mut self, logs: &[LogEntry]) {
         if self.commit_index > self.last_applied {
             // Apply
             let entries = &logs[self.last_applied..self.commit_index];

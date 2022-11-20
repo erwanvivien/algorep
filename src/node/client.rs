@@ -22,7 +22,7 @@ impl Node {
                 match command.clone() {
                     ClientCommand::Load { filename } => {
                         let uid =
-                            format!("{}-{}", self.current_term, self.logs.len() + 1).to_string();
+                            format!("{}-{}", self.current_term, self.logs.len() + 1);
 
                         leader.waiters.push_back(Waiter {
                             client_id: from,
