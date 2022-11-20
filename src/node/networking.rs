@@ -28,7 +28,7 @@ impl Node {
             from: self.id,
         };
 
-        let mut futures = Vec::with_capacity(self.senders.len() - 1);
+        let mut futures = Vec::with_capacity(self.node_count - 1);
 
         for (i, sender) in self.senders[..self.node_count].iter().enumerate() {
             if i == self.id {

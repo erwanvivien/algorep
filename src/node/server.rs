@@ -34,7 +34,7 @@ impl Node {
                 if let Role::Candidate(candidate) = &mut self.role {
                     if self.current_term == term && granted {
                         candidate.votes += 1;
-                        if candidate.votes > self.senders.len() / 2 {
+                        if candidate.votes > self.node_count / 2 {
                             self.promote_leader().await;
                         }
                     }
