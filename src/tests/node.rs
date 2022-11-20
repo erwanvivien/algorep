@@ -257,12 +257,8 @@ pub async fn client_server_should_receive_entry() {
 
 #[tokio::test]
 pub async fn should_timeout() {
-    let (threads, senders, mut receivers) = setup_servers(
-        1,
-        Some(vec![Duration::from_millis(100)]),
-        Fake::ClientServer,
-    )
-    .await;
+    let (threads, senders, mut receivers) =
+        setup_servers(1, Some(vec![Duration::from_millis(100)]), Fake::Server).await;
 
     let mut server_receiver = receivers.pop_front().unwrap();
     let leader = &senders[0];
