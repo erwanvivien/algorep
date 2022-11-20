@@ -1,9 +1,7 @@
 use log::info;
 
-use crate::{
-    message::MessageContent,
-    role::{CandidateData, LeaderData, Role},
-};
+use super::role::{CandidateData, LeaderData, Role};
+use crate::message::MessageContent;
 
 use super::Node;
 

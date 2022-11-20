@@ -14,7 +14,6 @@ pub struct VolatileState {
     pub commit_index: usize,
 }
 
-#[allow(dead_code)]
 impl VolatileState {
     pub fn new() -> Self {
         VolatileState {

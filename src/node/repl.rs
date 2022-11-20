@@ -2,7 +2,8 @@ use std::fs::OpenOptions;
 
 use log::info;
 
-use crate::{message::ReplAction, role::Role, state::VolatileState};
+use super::{role::Role, volatile_state::VolatileState};
+use crate::message::ReplAction;
 
 use super::Node;
 

@@ -3,7 +3,6 @@ use std::time::Duration;
 
 use crate::entry::{LogEntry, StateMutation};
 use crate::message::{ClientCommand, ClientResponse, Message, MessageContent};
-use crate::state::File;
 
 use super::utils::{assert_no_message, assert_vote, recv_timeout, setup_servers, shutdown, Fake};
 
@@ -428,10 +427,12 @@ pub async fn should_handle_append_entries() {
             let resp = client_receiver.recv().await.unwrap();
             assert_eq!(
                 resp.content,
-                MessageContent::ClientResponse(Ok(ClientResponse::File(File {
-                    filename: format!("filename {}", uid).to_string(),
-                    text: "".to_string(),
-                })))
+                MessageContent::ClientResponse(Ok(ClientResponse::File(
+                    crate::node::volatile_state::File {
+                        filename: format!("filename {}", uid).to_string(),
+                        text: "".to_string(),
+                    }
+                )))
             );
         }
     }

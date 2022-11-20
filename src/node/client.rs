@@ -1,9 +1,9 @@
 use log::debug;
 
+use super::role::{Role, Waiter};
 use crate::{
     entry::StateMutation,
     message::{ClientCommand, ClientResponse, ClientResponseError, Message, MessageContent},
-    role::{Role, Waiter},
 };
 
 use super::Node;

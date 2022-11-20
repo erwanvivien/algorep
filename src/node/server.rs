@@ -1,9 +1,7 @@
 use std::{cmp::min, fs::OpenOptions};
 
-use crate::{
-    message::{Message, MessageContent},
-    role::Role,
-};
+use super::role::Role;
+use crate::message::{Message, MessageContent};
 
 use super::Node;
 

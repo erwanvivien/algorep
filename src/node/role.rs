@@ -41,8 +41,8 @@ pub enum Role {
     Leader(LeaderData),
 }
 
-#[allow(dead_code)]
 impl Role {
+    #[allow(dead_code)]
     pub fn is_follower(&self) -> bool {
         matches!(self, Role::Follower)
     }

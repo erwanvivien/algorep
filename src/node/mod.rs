@@ -2,8 +2,11 @@ mod client;
 mod election;
 mod networking;
 mod repl;
+mod role;
 mod server;
 mod utils;
+
+pub(crate) mod volatile_state;
 
 use std::{collections::VecDeque, time::Duration};
 
@@ -14,10 +17,11 @@ use tokio::sync::mpsc::{Receiver, Sender};
 use crate::{
     entry::{LogEntry, StateMutation},
     message::{ClientResponseError, Message, MessageContent},
-    role::Role,
-    state::VolatileState,
     CONFIG,
 };
+
+use role::Role;
+use volatile_state::VolatileState;
 
 pub type NodeId = usize;
 pub type ClientId = usize;

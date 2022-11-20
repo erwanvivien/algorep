@@ -1,6 +1,6 @@
 use regex::Regex;
 
-use crate::{entry::LogEntry, node::NodeId, state::File};
+use crate::{entry::LogEntry, node::volatile_state::File, node::NodeId};
 
 #[derive(Debug, PartialEq, PartialOrd, Clone)]
 pub enum ReplAction {

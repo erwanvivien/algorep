@@ -3,8 +3,6 @@ mod config;
 mod entry;
 mod message;
 mod node;
-mod role;
-mod state;
 
 #[cfg(test)]
 mod tests;
