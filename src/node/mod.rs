@@ -3,21 +3,16 @@ mod election;
 mod handle;
 mod utils;
 
-use std::{cmp::min, collections::VecDeque, fs::OpenOptions, pin::Pin, time::Duration};
+use std::{collections::VecDeque, time::Duration};
 
-use log::{debug, error, info};
-use serde::{Deserialize, Serialize};
-use tokio::{
-    sync::mpsc::{Receiver, Sender},
-    time::Sleep,
-};
+use log::{debug, info};
+
+use tokio::sync::mpsc::{Receiver, Sender};
 
 use crate::{
     entry::{LogEntry, StateMutation},
-    message::{
-        ClientCommand, ClientResponse, ClientResponseError, Message, MessageContent, ReplAction,
-    },
-    role::{CandidateData, LeaderData, Role, Waiter},
+    message::{ClientResponseError, Message, MessageContent},
+    role::Role,
     state::VolatileState,
     CONFIG,
 };

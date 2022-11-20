@@ -1,20 +1,14 @@
-use std::{cmp::min, collections::VecDeque, fs::OpenOptions, pin::Pin, time::Duration};
+use std::{cmp::min, fs::OpenOptions};
 
-use log::{debug, error, info};
-use serde::{Deserialize, Serialize};
-use tokio::{
-    sync::mpsc::{Receiver, Sender},
-    time::Sleep,
-};
+use log::{debug, info};
 
 use crate::{
-    entry::{LogEntry, StateMutation},
+    entry::StateMutation,
     message::{
         ClientCommand, ClientResponse, ClientResponseError, Message, MessageContent, ReplAction,
     },
-    role::{CandidateData, LeaderData, Role, Waiter},
+    role::{Role, Waiter},
     state::VolatileState,
-    CONFIG,
 };
 
 use super::Node;
