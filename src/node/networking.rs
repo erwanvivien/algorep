@@ -1,4 +1,4 @@
-use log::error;
+use log::warn;
 
 use crate::message::{Message, MessageContent};
 
@@ -17,7 +17,7 @@ impl Node {
             .await;
 
         if let Err(err) = res {
-            error!("{err}");
+            warn!("Server {id}: {err}");
         }
     }
 
@@ -44,7 +44,7 @@ impl Node {
         for fut in futures {
             let res = fut.await;
             if let Err(err) = res {
-                error!("{err}");
+                warn!("{err}");
             }
         }
     }
