@@ -16,7 +16,7 @@ use tokio::sync::mpsc::{Receiver, Sender};
 
 use crate::{
     entry::{LogEntry, StateMutation},
-    message::{ClientResponseError, Message, MessageContent},
+    message::{ClientResponseError, Message, MessageContent, Speed},
     CONFIG,
 };
 
@@ -35,6 +35,7 @@ pub struct Node {
     simulate_crash: bool,
     pub(crate) election_timeout_range: (Duration, Duration),
     leader_id: Option<NodeId>,
+    speed: Speed,
 
     role: Role,
 
@@ -63,6 +64,7 @@ impl Node {
             simulate_crash: false,
             election_timeout_range: CONFIG.election_timeout_range(),
             leader_id: None,
+            speed: Speed::Fast,
 
             role: Role::Follower,
             current_term: 0,
@@ -81,7 +83,11 @@ impl Node {
                 break;
             }
 
+            tokio::time::sleep(self.speed.into()).await;
+
             tokio::select! {
+                // Biased means recv is prioritized over timeout
+                biased;
                 msg = self.receiver.recv() => {
                     debug!("Server {} received {:?}", self.id, msg);
                     if msg.is_none() {

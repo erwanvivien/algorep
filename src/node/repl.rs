@@ -46,7 +46,7 @@ impl Node {
             }
             ReplAction::Timeout => {
                 info!("Server {} is timed-out, becoming leader", self.id);
-                self.promote_leader().await;
+                self.start_election().await;
             }
             ReplAction::Display => {
                 info!("Server {} is displaying state", self.id);
@@ -82,7 +82,11 @@ impl Node {
                     self.display();
                 }
             }
-            ReplAction::Speed(_) => todo!(),
+            ReplAction::Speed(speed) => {
+                info!("Server {} new speed is {speed}", self.id);
+
+                self.speed = speed;
+            }
         }
     }
 }

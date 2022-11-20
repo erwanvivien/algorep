@@ -1,10 +1,42 @@
+use std::{
+    fmt::{Display, Formatter},
+    time::Duration,
+};
+
 use regex::Regex;
 
 use crate::{entry::LogEntry, node::volatile_state::File, node::NodeId};
 
+#[derive(Debug, Copy, PartialEq, PartialOrd, Clone)]
+pub enum Speed {
+    Fast,
+    Medium,
+    Slow,
+}
+
+impl Display for Speed {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Speed::Fast => write!(f, "Fast"),
+            Speed::Medium => write!(f, "Medium"),
+            Speed::Slow => write!(f, "Slow"),
+        }
+    }
+}
+
+impl From<Speed> for Duration {
+    fn from(speed: Speed) -> Self {
+        match speed {
+            Speed::Fast => Duration::from_millis(0),
+            Speed::Medium => Duration::from_millis(100),
+            Speed::Slow => Duration::from_millis(1000),
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, PartialOrd, Clone)]
 pub enum ReplAction {
-    Speed(f32),
+    Speed(Speed),
     Crash,
     Start,
     Shutdown,
@@ -27,10 +59,18 @@ impl ReplAction {
         let id_capture = repl_id.captures(&action)?;
         let id = id_capture.name("id")?.as_str().parse::<NodeId>().ok()?;
 
-        let speed_re = Regex::new(r"speed (?P<speed>\d+\.?\d*)").unwrap();
+        let speed_re = Regex::new(r"speed (?P<speed>\w+)").unwrap();
         if let Some(caps) = speed_re.captures(&action) {
-            let speed = caps.name("speed")?.as_str().parse::<f32>().ok()?;
-            Some((id, ReplAction::Speed(speed)))
+            let speed = caps.name("speed")?.as_str();
+
+            let speed = match speed {
+                "fast" => Some(Speed::Fast),
+                "medium" => Some(Speed::Medium),
+                "slow" => Some(Speed::Slow),
+                _ => return None,
+            };
+
+            speed.map(|fast| (id, ReplAction::Speed(fast)))
         } else if action.contains("crash") {
             Some((id, ReplAction::Crash))
         } else if action.contains("start") {
