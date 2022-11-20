@@ -1,6 +1,8 @@
-mod communication;
+mod client;
 mod election;
-mod handle;
+mod networking;
+mod repl;
+mod server;
 mod utils;
 
 use std::{collections::VecDeque, time::Duration};

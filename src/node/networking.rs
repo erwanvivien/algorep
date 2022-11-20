@@ -6,6 +6,7 @@ use super::{Node, NodeId};
 
 /// Communication part (emit & broadcast)
 impl Node {
+    // TODO: parallelize emit_all
     pub(super) async fn emit(&self, id: NodeId, content: MessageContent) {
         let res = self.senders[id]
             .send(Message {
@@ -21,7 +22,6 @@ impl Node {
     }
 
     pub(super) async fn broadcast(&self, content: MessageContent) {
-        // TODO: Fix parallel futures
         let message = Message {
             content,
             term: self.current_term,
