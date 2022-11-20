@@ -266,11 +266,6 @@ impl Node {
                         match_indices.sort();
                         let new_commit_index = match_indices[self.node_count / 2];
 
-                        if self.state.commit_index != new_commit_index {
-                            dbg!(self.state.commit_index, new_commit_index);
-                            dbg!(match_indices);
-                        }
-
                         if new_commit_index > self.state.commit_index
                             && self.logs[new_commit_index - 1].term == self.current_term
                         {
