@@ -19,6 +19,7 @@ use log::{error, info};
 use crate::{
     client::Client,
     message::{ClientCommand, ReplAction},
+    node::persistent_state::PersistentState,
 };
 
 #[tokio::main]
@@ -57,6 +58,14 @@ async fn main() {
 
         let child = tokio::spawn(async move {
             let mut node = Node::new(id, node_count, receiver, senders);
+
+            // Load state from disk
+            let persistent_state = PersistentState::from_file(id);
+            if let Some(persistent_state) = persistent_state {
+                dbg!(&persistent_state);
+                node.update_persistent(&persistent_state);
+            }
+
             node.run().await;
         });
 

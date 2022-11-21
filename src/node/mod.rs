@@ -6,6 +6,7 @@ mod rpc_client;
 mod rpc_server;
 mod utils;
 
+pub(crate) mod persistent_state;
 pub(crate) mod volatile_state;
 
 use std::{collections::VecDeque, time::Duration};
@@ -20,6 +21,7 @@ use crate::{
     CONFIG,
 };
 
+use persistent_state::PersistentState;
 use role::Role;
 use volatile_state::VolatileState;
 
@@ -73,6 +75,12 @@ impl Node {
 
             state: VolatileState::new(),
         }
+    }
+
+    pub fn update_persistent(&mut self, state: &PersistentState) {
+        self.current_term = state.current_term;
+        self.voted_for = state.voted_for;
+        self.logs = state.logs.clone();
     }
 
     pub async fn run(&mut self) {

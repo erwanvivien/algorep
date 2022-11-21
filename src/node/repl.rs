@@ -1,10 +1,9 @@
-use std::fs::OpenOptions;
-
 use log::info;
 
 use super::{role::Role, volatile_state::VolatileState};
 use crate::message::ReplAction;
 
+use super::persistent_state::PersistentState;
 use super::Node;
 
 /// Message Handling part
@@ -56,30 +55,19 @@ impl Node {
             ReplAction::Recovery => {
                 info!("Server {} current state is now empty", self.id);
 
-                self.role = Role::Follower;
-                self.current_term = 0;
-                self.voted_for = None;
-                self.logs = Vec::new();
+                let state = PersistentState::from_file(self.id);
+                if let Some(state) = state {
+                    info!(
+                        "Server {0} is now recovering, from `node_{0}.entries`",
+                        self.id
+                    );
 
-                self.leader_id = None;
+                    self.role = Role::Follower;
+                    self.update_persistent(&state);
 
-                self.state = VolatileState::new();
+                    self.leader_id = None;
+                    self.state = VolatileState::new();
 
-                self.display();
-
-                info!(
-                    "Server {0} is now recovering, from `node_{0}.entries`",
-                    self.id
-                );
-
-                let mut file = OpenOptions::new()
-                    .write(true)
-                    .create(true)
-                    .truncate(true)
-                    .open(format!("node_{}.entries", self.id));
-
-                if let Ok(file) = &mut file {
-                    self.logs = serde_cbor::from_reader(file).unwrap();
                     self.display();
                 }
             }

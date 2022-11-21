@@ -1,6 +1,6 @@
-use std::{cmp::min, fs::OpenOptions};
+use std::cmp::min;
 
-use super::role::Role;
+use super::{persistent_state::PersistentState, role::Role};
 use crate::message::{Message, MessageContent};
 
 use super::Node;
@@ -77,15 +77,10 @@ impl Node {
                         self.state.commit_index = min(leader_commit, self.logs.len());
                     }
 
-                    let mut file = OpenOptions::new()
-                        .write(true)
-                        .create(true)
-                        .truncate(true)
-                        .open(format!("node_{}.entries", self.id));
-
-                    if let Ok(file) = &mut file {
-                        serde_cbor::to_writer(file, &self.logs).unwrap();
-                    }
+                    // If we fail to write to disk, do not respond to leader
+                    if PersistentState::save(self).is_err() {
+                        return true;
+                    };
                 }
 
                 self.emit(
