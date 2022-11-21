@@ -21,8 +21,11 @@ impl Node {
                     && last_log_term >= self.logs.last().map(|e| e.term).unwrap_or(0)
                     && last_log_index >= self.logs.len();
 
+                if term > self.current_term {
+                    self.demote_to_follower(None, term).await;
+                }
+
                 self.voted_for = if granted { Some(from) } else { None };
-                self.demote_to_follower(None, term).await;
 
                 self.emit(
                     from,
@@ -34,6 +37,10 @@ impl Node {
                 granted
             }
             MessageContent::VoteResponse { granted, term } => {
+                if term > self.current_term {
+                    self.demote_to_follower(None, term).await;
+                }
+
                 if let Role::Candidate(candidate) = &mut self.role {
                     if self.current_term == term && granted {
                         candidate.votes += 1;
@@ -95,8 +102,12 @@ impl Node {
             MessageContent::AppendResponse {
                 match_index,
                 success,
-                ..
+                term,
             } => {
+                if term > self.current_term {
+                    self.demote_to_follower(None, term).await;
+                }
+
                 if let Role::Leader(leader) = &mut self.role {
                     if success {
                         leader.match_index[from] = match_index;
@@ -115,18 +126,6 @@ impl Node {
                             leader.next_index[self.id] = match_index + 1;
 
                             self.state.commit_index = new_commit_index;
-
-                            let mut file = OpenOptions::new()
-                                .write(true)
-                                .create(true)
-                                .truncate(true)
-                                .open(format!("node_{}.entries", self.id));
-
-                            if let Ok(file) = &mut file {
-                                for entry in &self.logs {
-                                    serde_cbor::to_writer(&mut *file, entry).unwrap();
-                                }
-                            }
                         }
                     } else {
                         leader.next_index[from] -= 1;
