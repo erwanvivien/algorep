@@ -1,9 +1,9 @@
-mod client;
 mod election;
 mod networking;
 mod repl;
 mod role;
-mod server;
+mod rpc_client;
+mod rpc_server;
 mod utils;
 
 pub(crate) mod volatile_state;
@@ -85,6 +85,7 @@ impl Node {
 
             tokio::time::sleep(self.speed.into()).await;
 
+            // Select both the receiver and the timeout
             tokio::select! {
                 // Biased means recv is prioritized over timeout
                 biased;
@@ -99,12 +100,12 @@ impl Node {
                         Message { content: MessageContent::Repl(action), ..} => {
                             self.handle_repl(action).await
                         },
-                        Message { content: MessageContent::ClientRequest(_), .. } => {
-                            self.handle_client_command(msg).await
+                        Message { content: MessageContent::ClientRequest(command), from, .. } => {
+                            self.handle_client_command(command, from).await
                         },
                         msg => {
                             if !self.simulate_crash {
-                                let should_reset_timeout = self.handle_message(msg).await
+                                let should_reset_timeout = self.handle_server_message(msg).await
                                     && !self.role.is_candidate();
                                 if should_reset_timeout {
                                     timeout = self.generate_timeout();
@@ -132,7 +133,7 @@ impl Node {
             }
 
             self.state.apply_committed_entries(&self.logs);
-            self.notify_waiters().await;
+            self.notify_waiting_clients().await;
         }
     }
 }
@@ -198,36 +199,5 @@ impl Node {
             term: self.current_term,
             mutation,
         })
-    }
-
-    async fn notify_waiters(&mut self) {
-        if let Role::Leader(leader) = &mut self.role {
-            // We need to store waiters in a separate vector to prevent borrowing issues :dead:
-            let mut ready_waiters = Vec::new();
-            while let Some(waiter) = leader.waiters.front() {
-                if waiter.index <= self.state.commit_index {
-                    ready_waiters.push(leader.waiters.pop_front().unwrap());
-                } else {
-                    break;
-                }
-            }
-
-            for waiter in ready_waiters {
-                let resp = if waiter.term == self.logs[waiter.index - 1].term {
-                    Ok(waiter.result)
-                } else {
-                    Err(ClientResponseError::EntryOverridden)
-                };
-
-                // We subtract node_count because our client index are after the servers
-                info!(
-                    "Server {} sending response to client {}",
-                    self.id,
-                    waiter.client_id - self.node_count
-                );
-                self.emit(waiter.client_id, MessageContent::ClientResponse(resp))
-                    .await;
-            }
-        }
     }
 }

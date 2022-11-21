@@ -7,8 +7,8 @@ use super::Node;
 
 /// Message Handling part
 impl Node {
-    /// Handles every message exec MessageContent::Repl
-    pub(super) async fn handle_message(&mut self, message: Message) -> bool {
+    /// Handles every message exec from servers, returns true if we need to reset the election timeout
+    pub(super) async fn handle_server_message(&mut self, message: Message) -> bool {
         let Message {
             term,
             from,
@@ -64,17 +64,16 @@ impl Node {
 
                     if leader_commit > self.state.commit_index {
                         self.state.commit_index = min(leader_commit, self.logs.len());
+                    }
 
-                        // TODO(fix): maybe only if success
-                        let mut file = OpenOptions::new()
-                            .write(true)
-                            .create(true)
-                            .truncate(true)
-                            .open(format!("node_{}.entries", self.id));
+                    let mut file = OpenOptions::new()
+                        .write(true)
+                        .create(true)
+                        .truncate(true)
+                        .open(format!("node_{}.entries", self.id));
 
-                        if let Ok(file) = &mut file {
-                            serde_cbor::to_writer(file, &self.logs).unwrap();
-                        }
+                    if let Ok(file) = &mut file {
+                        serde_cbor::to_writer(file, &self.logs).unwrap();
                     }
                 }
 
@@ -126,7 +125,7 @@ impl Node {
                         }
                     } else {
                         leader.next_index[from] -= 1;
-                        // TODO: Send again immediately
+                        // TODO: Send again immediately to improve performance
                     }
                     true
                 } else {

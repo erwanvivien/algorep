@@ -9,6 +9,7 @@ use super::Node;
 
 /// Message Handling part
 impl Node {
+    /// Display server state
     fn display(&self) {
         println!("====================");
         println!("Server {} state:", self.id);
