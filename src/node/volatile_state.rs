@@ -7,6 +7,7 @@ pub struct File {
     pub text: String,
 }
 
+/// The volatile state is a simple hashmap. The hashmap is in sync up-to commit_index for a specific node
 #[derive(Debug)]
 pub struct VolatileState {
     storage: HashMap<String, File>,

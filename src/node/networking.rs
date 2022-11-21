@@ -4,6 +4,7 @@ use super::{Node, NodeId};
 
 /// Communication part (emit & broadcast)
 impl Node {
+    /// Sends an async message to a server node
     pub(super) fn emit(&self, id: NodeId, content: MessageContent) {
         let sender = self.senders[id].clone();
         let from = self.id;
@@ -11,6 +12,7 @@ impl Node {
         tokio::spawn(async move { sender.send(Message { content, from }).await });
     }
 
+    /// Broadcasts async messages to all server nodes
     pub(super) fn broadcast(&self, content: MessageContent) {
         let message = Message {
             content,

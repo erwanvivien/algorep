@@ -5,6 +5,7 @@ use tokio::time::Sleep;
 use super::Node;
 
 impl Node {
+    /// Helper function to generate duration for a timeout
     pub(super) fn generate_timeout(&self) -> Pin<Box<Sleep>> {
         let duration = {
             let (min, max) = self.election_timeout_range;

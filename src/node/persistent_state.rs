@@ -9,6 +9,8 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 
+/// This is a helper struct to serialize the persistent state of a node
+/// It is used to save and load a state to/from a file
 pub struct PersistentState {
     id: NodeId,
 

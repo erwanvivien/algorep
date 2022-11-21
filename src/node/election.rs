@@ -1,11 +1,12 @@
 use log::info;
 
 use super::role::{CandidateData, LeaderData, Role};
-use crate::{message::MessageContent, entry::StateMutation};
+use crate::{entry::StateMutation, message::MessageContent};
 
 use super::Node;
 
 impl Node {
+    /// The function called on timer expiration
     pub(super) async fn start_election(&mut self) {
         info!("Server {} started election...", self.id);
         self.role = Role::Candidate(CandidateData { votes: 1 });
@@ -18,6 +19,7 @@ impl Node {
         });
     }
 
+    /// The function called when a node is elected leader
     pub(super) async fn promote_leader(&mut self) {
         info!("Server {} is now leader !", self.id);
         self.role = Role::Leader(LeaderData::new(self.logs.len() + 1, self.node_count));

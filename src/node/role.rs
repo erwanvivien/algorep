@@ -34,6 +34,8 @@ impl LeaderData {
     }
 }
 
+/// This enum stores the current role of a node with the associated data
+/// This allows use to be sure that when we access the data, we are in the correct role
 #[derive(Debug, PartialEq, Eq)]
 pub enum Role {
     Follower,
