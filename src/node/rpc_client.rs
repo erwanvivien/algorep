@@ -13,7 +13,7 @@ impl Node {
     /// Handles every message exec from clients
     pub(super) async fn handle_client_command(&mut self, command: ClientCommand, from: usize) {
         if let Role::Leader(leader) = &mut self.role {
-            match command.clone() {
+            match command {
                 ClientCommand::Load { filename } => {
                     let uid = format!("{}-{}", self.current_term, self.logs.len() + 1);
 
@@ -21,7 +21,7 @@ impl Node {
                         client_id: from,
                         term: self.current_term,
                         index: self.logs.len() + 1,
-                        result: ClientResponse::UID(uid.clone()),
+                        result: ClientResponse::Uid(uid.clone()),
                     });
 
                     self.add_log(StateMutation::Create { filename, uid });

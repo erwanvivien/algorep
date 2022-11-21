@@ -7,7 +7,7 @@ use regex::Regex;
 
 use crate::{entry::LogEntry, node::volatile_state::File, node::NodeId};
 
-#[derive(Debug, Copy, PartialEq, PartialOrd, Clone)]
+#[derive(Debug, Copy, PartialEq, Eq, Clone)]
 pub enum Speed {
     Fast,
     Medium,
@@ -34,7 +34,7 @@ impl From<Speed> for Duration {
     }
 }
 
-#[derive(Debug, PartialEq, PartialOrd, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum ReplAction {
     Speed(Speed),
     Crash,
@@ -153,7 +153,7 @@ impl ClientCommand {
 #[derive(Debug, Eq, PartialEq, PartialOrd, Clone)]
 pub enum ClientResponse {
     Ok,
-    UID(String),
+    Uid(String),
     List(Vec<String>),
     File(File),
 }
@@ -165,7 +165,7 @@ pub enum ClientResponseError {
     WrongLeader(Option<NodeId>),
 }
 
-#[derive(Debug, PartialEq, PartialOrd, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum MessageContent {
     // Election
     VoteRequest {
@@ -199,7 +199,7 @@ pub enum MessageContent {
     ClientResponse(Result<ClientResponse, ClientResponseError>),
 }
 
-#[derive(Debug, PartialEq, PartialOrd, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Message {
     pub content: MessageContent,
     pub from: NodeId,

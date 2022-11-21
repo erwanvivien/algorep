@@ -182,7 +182,7 @@ pub async fn client_send_request() {
     let resp = client_receiver.recv().await.unwrap();
     assert_eq!(
         resp.content,
-        MessageContent::ClientResponse(Ok(ClientResponse::UID("1-1".to_string())))
+        MessageContent::ClientResponse(Ok(ClientResponse::Uid("1-1".to_string())))
     );
 
     assert_no_message(client_receiver).await;
@@ -217,7 +217,7 @@ pub async fn client_server_should_receive_entry() {
     let resp = client_receiver.recv().await.unwrap();
     assert_eq!(
         resp.content,
-        MessageContent::ClientResponse(Ok(ClientResponse::UID("1-1".to_string())))
+        MessageContent::ClientResponse(Ok(ClientResponse::Uid("1-1".to_string())))
     );
 
     let resp = server_receiver.recv().await.unwrap();
