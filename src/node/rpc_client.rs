@@ -1,6 +1,6 @@
 use log::{debug, info};
 
-use super::role::{Role, Waiter};
+use super::role::{Role, WaitingClient};
 use crate::{
     entry::StateMutation,
     message::{ClientCommand, ClientResponse, ClientResponseError, MessageContent},
@@ -17,7 +17,7 @@ impl Node {
                 ClientCommand::Load { filename } => {
                     let uid = format!("{}-{}", self.current_term, self.logs.len() + 1);
 
-                    leader.waiters.push_back(Waiter {
+                    leader.waiters.push_back(WaitingClient {
                         client_id: from,
                         term: self.current_term,
                         index: self.logs.len() + 1,
@@ -35,7 +35,7 @@ impl Node {
                     );
                 }
                 ClientCommand::Delete { uid } => {
-                    leader.waiters.push_back(Waiter {
+                    leader.waiters.push_back(WaitingClient {
                         client_id: from,
                         term: self.current_term,
                         index: self.logs.len() + 1,
@@ -45,7 +45,7 @@ impl Node {
                     self.add_log(StateMutation::Delete { uid });
                 }
                 ClientCommand::Append { uid, text } => {
-                    leader.waiters.push_back(Waiter {
+                    leader.waiters.push_back(WaitingClient {
                         client_id: from,
                         term: self.current_term,
                         index: self.logs.len() + 1,

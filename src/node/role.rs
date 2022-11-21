@@ -8,7 +8,7 @@ pub struct CandidateData {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct Waiter {
+pub struct WaitingClient {
     pub client_id: ClientId,
     pub term: usize,
     pub index: usize,
@@ -20,7 +20,7 @@ pub struct LeaderData {
     pub next_index: Vec<usize>,
     pub match_index: Vec<usize>,
 
-    pub waiters: VecDeque<Waiter>,
+    pub waiters: VecDeque<WaitingClient>,
 }
 
 impl LeaderData {

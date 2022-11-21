@@ -32,6 +32,7 @@ impl VolatileState {
         self.storage.keys().cloned().collect()
     }
 
+    /// Apply a log entry to the volatile state
     pub fn process(&mut self, action: &StateMutation) {
         match action {
             StateMutation::Create { uid, filename } => {
@@ -56,17 +57,14 @@ impl VolatileState {
         }
     }
 
-    pub fn process_batch(&mut self, entries: &[LogEntry]) {
-        for entry in entries {
-            self.process(&entry.mutation);
-        }
-    }
-
+    /// Apply commited log entries to the volatile state
     pub fn apply_committed_entries(&mut self, logs: &[LogEntry]) {
         if self.commit_index > self.last_applied {
             // Apply
             let entries = &logs[self.last_applied..self.commit_index];
-            self.process_batch(entries);
+            for entry in entries {
+                self.process(&entry.mutation);
+            }
             self.last_applied = self.commit_index;
         }
     }

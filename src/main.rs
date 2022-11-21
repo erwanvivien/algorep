@@ -82,11 +82,13 @@ async fn main() {
 
     #[rustfmt::skip]
     println!(
-r"Welcome to our RAFT implementation!
-Please see the README for more information.
-You have two ways to interact with the system:
-1. Use the REPL <server_id> <command> [args]
-2. Use the <command> [args]"
+r"
+        Welcome to our RAFT implementation!
+        Please see the README for more information.
+        You have two ways to interact with the system:
+          1. Use the REPL <server_id> <command> [args]
+          2. Use the <command> [args]
+"
     );
 
     // Read commands from stdin

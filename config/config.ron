@@ -2,5 +2,5 @@ Config (
     node_count: 5,
     election_timeout: (Millisecond(150), Millisecond(300)),
 
-    channel_capacity: 4
+    channel_capacity: 4096
 )
