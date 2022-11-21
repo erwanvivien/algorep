@@ -11,7 +11,6 @@ impl Node {
         let res = self.senders[id]
             .send(Message {
                 content,
-                term: self.current_term,
                 from: self.id,
             })
             .await;
@@ -24,7 +23,6 @@ impl Node {
     pub(super) async fn broadcast(&self, content: MessageContent) {
         let message = Message {
             content,
-            term: self.current_term,
             from: self.id,
         };
 

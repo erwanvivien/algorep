@@ -158,6 +158,7 @@ impl Node {
                         },
                         entries: self.logs[(next_index - 1)..].to_vec(),
                         leader_commit: self.state.commit_index,
+                        term: self.current_term,
                     },
                 )
                 .await;

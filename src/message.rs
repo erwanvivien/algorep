@@ -171,9 +171,12 @@ pub enum MessageContent {
     VoteRequest {
         last_log_index: usize,
         last_log_term: usize,
+        term: usize,
     },
-    VoteResponse(bool),
-
+    VoteResponse {
+        granted: bool,
+        term: usize,
+    },
     // Log replication
     AppendEntries {
         entries: Vec<LogEntry>,
@@ -181,10 +184,12 @@ pub enum MessageContent {
         prev_log_index: usize,
         prev_log_term: usize,
         leader_commit: usize,
+        term: usize,
     },
     AppendResponse {
         success: bool,
         match_index: usize,
+        term: usize,
     },
 
     // External action
@@ -198,6 +203,4 @@ pub enum MessageContent {
 pub struct Message {
     pub content: MessageContent,
     pub from: NodeId,
-    // TODO: move append entries / vote_request
-    pub term: usize,
 }

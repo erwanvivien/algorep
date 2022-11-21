@@ -90,7 +90,6 @@ async fn main() {
                     .send(Message {
                         content: message::MessageContent::Repl(repl),
                         from: usize::MAX,
-                        term: usize::MAX,
                     })
                     .await
                     .unwrap();
@@ -111,7 +110,6 @@ async fn main() {
             .send(Message {
                 content: message::MessageContent::Repl(ReplAction::Shutdown),
                 from: usize::MAX,
-                term: usize::MAX,
             })
             .await;
     }

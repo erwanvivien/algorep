@@ -9,28 +9,32 @@ use super::Node;
 impl Node {
     /// Handles every message exec from servers, returns true if we need to reset the election timeout
     pub(super) async fn handle_server_message(&mut self, message: Message) -> bool {
-        let Message {
-            term,
-            from,
-            content,
-        } = message;
+        let Message { from, content } = message;
 
         match content {
             MessageContent::VoteRequest {
                 last_log_index,
                 last_log_term,
+                term,
             } => {
-                let accept = term > self.current_term
+                let granted = term > self.current_term
                     && last_log_term >= self.logs.last().map(|e| e.term).unwrap_or(0)
                     && last_log_index >= self.logs.len();
 
-                self.voted_for = if accept { Some(from) } else { None };
+                self.voted_for = if granted { Some(from) } else { None };
                 self.demote_to_follower(None, term).await;
 
-                self.emit(from, MessageContent::VoteResponse(accept)).await;
-                accept
+                self.emit(
+                    from,
+                    MessageContent::VoteResponse {
+                        granted,
+                        term: self.current_term,
+                    },
+                )
+                .await;
+                granted
             }
-            MessageContent::VoteResponse(granted) => {
+            MessageContent::VoteResponse { granted, term } => {
                 if let Role::Candidate(candidate) = &mut self.role {
                     if self.current_term == term && granted {
                         candidate.votes += 1;
@@ -47,6 +51,7 @@ impl Node {
                 prev_log_index,
                 prev_log_term,
                 leader_commit,
+                term,
             } => {
                 let same_term = term >= self.current_term;
 
@@ -82,6 +87,7 @@ impl Node {
                     MessageContent::AppendResponse {
                         success,
                         match_index: self.logs.len(),
+                        term: self.current_term,
                     },
                 )
                 .await;
@@ -91,6 +97,7 @@ impl Node {
             MessageContent::AppendResponse {
                 match_index,
                 success,
+                ..
             } => {
                 if let Role::Leader(leader) = &mut self.role {
                     if success {

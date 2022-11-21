@@ -18,16 +18,22 @@ pub async fn should_accept_vote() {
             content: MessageContent::VoteRequest {
                 last_log_index: 0,
                 last_log_term: 0,
+                term: 1,
             },
             from: 1,
-            term: 1,
         })
         .await
         .expect("Send should not fail");
 
     let message = receiver.recv().await.unwrap();
 
-    assert_eq!(message.content, MessageContent::VoteResponse(true));
+    assert_eq!(
+        message.content,
+        MessageContent::VoteResponse {
+            granted: true,
+            term: 1
+        }
+    );
 
     shutdown(senders, threads).await
 }
@@ -56,6 +62,7 @@ pub async fn should_retry_election() {
         MessageContent::VoteRequest {
             last_log_index: 0,
             last_log_term: 0,
+            term: 1
         }
     );
 
@@ -66,8 +73,8 @@ pub async fn should_retry_election() {
                 prev_log_index: 0,
                 prev_log_term: 0,
                 leader_commit: 0,
+                term: 1,
             },
-            term: message.term,
             from: 1,
         })
         .await
@@ -78,7 +85,8 @@ pub async fn should_retry_election() {
         message.content,
         MessageContent::AppendResponse {
             success: true,
-            match_index: 0
+            match_index: 0,
+            term: 1
         }
     );
 
@@ -88,9 +96,9 @@ pub async fn should_retry_election() {
         MessageContent::VoteRequest {
             last_log_index: 0,
             last_log_term: 0,
+            term: 2
         }
     );
-    assert_eq!(message.term, 2);
 
     shutdown(senders, threads).await
 }
@@ -112,6 +120,7 @@ pub async fn should_elect_first() {
         MessageContent::VoteRequest {
             last_log_index: 0,
             last_log_term: 0,
+            term: 1
         }
     );
     assert_eq!(message.from, 0);
@@ -123,11 +132,10 @@ pub async fn should_elect_first() {
             entries: Vec::new(),
             prev_log_index: 0,
             prev_log_term: 0,
-            leader_commit: 0
+            leader_commit: 0,
+            term: 1
         }
     );
-
-    assert_eq!(message.term, 1);
 
     shutdown(senders, threads).await
 }
@@ -166,7 +174,6 @@ pub async fn client_send_request() {
             content: MessageContent::ClientRequest(ClientCommand::Load {
                 filename: "my_file".to_string(),
             }),
-            term: 1,
             from: 2, // client
         })
         .await
@@ -202,7 +209,6 @@ pub async fn client_server_should_receive_entry() {
             content: MessageContent::ClientRequest(ClientCommand::Load {
                 filename: "my_file".to_string(),
             }),
-            term: 0,
             from: 3, // client
         })
         .await
@@ -226,6 +232,7 @@ pub async fn client_server_should_receive_entry() {
         prev_log_index: 0,
         prev_log_term: 0,
         leader_commit: 0,
+        term: 1,
     };
     assert_eq!(resp.content, expected_content);
 
@@ -234,8 +241,8 @@ pub async fn client_server_should_receive_entry() {
             content: MessageContent::AppendResponse {
                 success: true,
                 match_index: 1,
+                term: 1,
             },
-            term: 1,
             from: 2,
         })
         .await
@@ -247,6 +254,7 @@ pub async fn client_server_should_receive_entry() {
         prev_log_index: 1,
         prev_log_term: 1,
         leader_commit: 1,
+        term: 1,
     };
     assert_eq!(resp.content, expected_content);
 
@@ -267,15 +275,21 @@ pub async fn should_timeout() {
             content: MessageContent::VoteRequest {
                 last_log_index: 0,
                 last_log_term: 0,
+                term: 5,
             },
             from: 1,
-            term: 5,
         })
         .await
         .unwrap();
 
     let resp = server_receiver.recv().await.unwrap();
-    assert_eq!(resp.content, MessageContent::VoteResponse(true));
+    assert_eq!(
+        resp.content,
+        MessageContent::VoteResponse {
+            term: 5,
+            granted: true
+        }
+    );
 
     tokio::time::sleep(Duration::from_millis(50)).await;
 
@@ -286,9 +300,9 @@ pub async fn should_timeout() {
                 prev_log_index: 0,
                 prev_log_term: 0,
                 leader_commit: 0,
+                term: 0,
             },
             from: 1,
-            term: 0,
         })
         .await
         .unwrap();
@@ -299,6 +313,7 @@ pub async fn should_timeout() {
         MessageContent::AppendResponse {
             success: false,
             match_index: 0,
+            term: 5
         }
     );
 
@@ -338,8 +353,8 @@ pub async fn should_handle_append_entries() {
                 prev_log_index: previous_count,
                 prev_log_term: min(previous_count, 1),
                 leader_commit: previous_count,
+                term: 1,
             },
-            term: 1,
             from: 1,
         };
 
@@ -349,6 +364,7 @@ pub async fn should_handle_append_entries() {
         let expected_content = MessageContent::AppendResponse {
             success: true,
             match_index: previous_count,
+            term: 1,
         };
 
         let resp = server_receiver.recv().await.unwrap();
@@ -361,8 +377,8 @@ pub async fn should_handle_append_entries() {
             prev_log_index: previous_count,
             prev_log_term: 1,
             leader_commit: previous_count,
+            term: 1,
         },
-        term: 1,
         from: 1,
     };
 
@@ -371,6 +387,7 @@ pub async fn should_handle_append_entries() {
         let expected_content = MessageContent::AppendResponse {
             success: true,
             match_index: previous_count,
+            term: 1,
         };
 
         server_0.send(msg.clone()).await.unwrap();
@@ -385,13 +402,16 @@ pub async fn should_handle_append_entries() {
         MessageContent::VoteRequest {
             last_log_index: previous_count,
             last_log_term: 1,
+            term: 2
         }
     );
 
     server_0
         .send(Message {
-            content: MessageContent::VoteResponse(true),
-            term: message.term,
+            content: MessageContent::VoteResponse {
+                granted: true,
+                term: 2,
+            },
             from: 1,
         })
         .await
@@ -404,7 +424,8 @@ pub async fn should_handle_append_entries() {
             entries: Vec::new(),
             prev_log_index: previous_count,
             prev_log_term: 1,
-            leader_commit: previous_count
+            leader_commit: previous_count,
+            term: 2
         }
     );
 
@@ -418,7 +439,6 @@ pub async fn should_handle_append_entries() {
                     content: MessageContent::ClientRequest(ClientCommand::Get {
                         uid: format!("uid {}", uid),
                     }),
-                    term: 1,
                     from: 2, // Client
                 })
                 .await

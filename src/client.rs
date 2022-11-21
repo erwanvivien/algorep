@@ -50,7 +50,6 @@ impl Client {
         let message = Message {
             content: message_content,
             from: self.id,
-            term: 0,
         };
 
         if let Err(err) = self.senders[leader_id].send(message).await {

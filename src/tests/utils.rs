@@ -75,7 +75,6 @@ pub async fn shutdown(senders: Vec<Sender<Message>>, threads: Vec<JoinHandle<()>
         sender
             .send(Message {
                 content: MessageContent::Repl(Shutdown),
-                term: usize::MAX,
                 from: usize::MAX,
             })
             .await
@@ -94,13 +93,16 @@ pub async fn assert_vote(fake_receiver: &mut Receiver<Message>, fake_sender: &Se
         MessageContent::VoteRequest {
             last_log_index: 0,
             last_log_term: 0,
+            term: 1
         }
     );
 
     fake_sender
         .send(Message {
-            content: MessageContent::VoteResponse(true),
-            term: message.term,
+            content: MessageContent::VoteResponse {
+                granted: true,
+                term: 1,
+            },
             from: 1,
         })
         .await
@@ -113,7 +115,8 @@ pub async fn assert_vote(fake_receiver: &mut Receiver<Message>, fake_sender: &Se
             entries: Vec::new(),
             prev_log_index: 0,
             prev_log_term: 0,
-            leader_commit: 0
+            leader_commit: 0,
+            term: 1
         }
     );
 }

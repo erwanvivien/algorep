@@ -14,6 +14,7 @@ impl Node {
         self.broadcast(MessageContent::VoteRequest {
             last_log_index: self.logs.len(),
             last_log_term: self.logs.last().map(|e| e.term).unwrap_or(0),
+            term: self.current_term,
         })
         .await;
     }
