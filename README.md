@@ -1,29 +1,29 @@
-# algorep
+# Algorep project
 
-Implementation of RAFT
+## Authors
 
-## Server configuration
+- **Hugo BOIS**
+- **Nathan CABASSO**
+- **Jeremy CROISET**
+- **Ferdinand MOM**
+- **Erwan VIVIEN**
 
-The configuration file is a RON file (Rusty Object Notation) that can be found in the `config` directory and is named `config.ron`. \
-What can be configured is the following:
-
-- node_count: the number of nodes(servers) in the cluster
-- election_timeout: a range of `ConfigTime` enum (see `config.rs` for more details). This range is what is used by servers to generated a random timer.
-- client_count: the number of clients that will be spawned by the `main.rs` file
+Implementation of RAFT consensus algorithm in Rust. We followed the [paper](https://raft.github.io/raft.pdf). \
+This is a school project for the course `Algorep` at EPITA (School of Engineering and Computer Science).
 
 ## Running the project
 
 To run the project, you need to have `cargo` installed. \
-Then, you can run the project by running the following command in the root directory of the project: `cargo run --release`. \
+Then, you can run the project by running the following command in the root directory of the project: `cargo run --release`.
 
 You can interract with servers by using the following commands:
 
 - `REPL <server_id> <command>` with `<server_id>` in the range of [0; node_count - 1] and `<command>` being one of the following:
 
   - `CRASH`: Crash the server (ignores messages)
-  - `START`: Resumes the server (starts to handle messages)
+  - `START`: Allows the clients to send messages to the servers
   - `SHUTDOWN`: Shutdown the server (stops the server, server is no longer reachable)
-  - `RECOVERY`: Not implemented yet
+  - `RECOVERY`: Reload the data from the disk and remove volatile state
   - `TIMEOUT`: Force the server to start an election
   - `DISPLAY`: Display the state of the server
 
@@ -38,10 +38,19 @@ You can act as a client by using the following commands:
 
 **Note**: The client does not automaticaly retry to send a message if it fails. You need to resend the message manually. This is the design we chose for the client.
 
+## Server configuration
+
+The configuration file is a RON file (Rusty Object Notation) that can be found in the `config` directory and is named `config.ron`. \
+What can be configured is the following:
+
+- node_count: the number of nodes(servers) in the cluster
+- election_timeout: a range of `ConfigTime` enum (see `config.rs` for more details). This range is what is used by servers to generated a random timer.
+- client_count: the number of clients that will be spawned by the `main.rs` file
+
 ## Running the tests
 
 To run the tests, you need to have `cargo` installed. \
-Then, you can run the tests by running the following command in the root directory of the project: `cargo test`. \
+Then, you can run the tests by running the following command in the root directory of the project: `cargo test`.
 
 The following tests are implemented:
 
