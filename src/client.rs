@@ -3,7 +3,10 @@ use std::sync::{
     Arc,
 };
 
-use tokio::sync::mpsc::{Receiver, Sender};
+use tokio::{
+    sync::mpsc::{Receiver, Sender},
+    task::JoinHandle,
+};
 
 use crate::message::{ClientCommand, ClientResponseError, Message, MessageContent};
 
@@ -12,8 +15,14 @@ use log::{error, info};
 pub struct Client {
     id: usize,
     senders: Vec<Sender<Message>>,
-
     leader_id: Arc<AtomicUsize>,
+    receiver_handle: JoinHandle<()>,
+}
+
+impl Drop for Client {
+    fn drop(&mut self) {
+        self.receiver_handle.abort();
+    }
 }
 
 impl Client {
@@ -24,12 +33,13 @@ impl Client {
         senders: Vec<Sender<Message>>,
     ) -> Self {
         let leader_id = Arc::new(AtomicUsize::new(rand::random::<usize>() % node_count));
-        Client::start_receiver(receiver, leader_id.clone());
+        let receiver_handle = Client::start_receiver(receiver, leader_id.clone());
 
         Self {
             id,
             senders,
             leader_id,
+            receiver_handle,
         }
     }
 
@@ -48,8 +58,10 @@ impl Client {
         }
     }
 
-    pub fn start_receiver(receiver: Receiver<Message>, leader_id: Arc<AtomicUsize>) {
-        // TODO: cleanup receiver thread
+    pub fn start_receiver(
+        receiver: Receiver<Message>,
+        leader_id: Arc<AtomicUsize>,
+    ) -> JoinHandle<()> {
         tokio::spawn(async move {
             let mut receiver = receiver;
             while let Some(message) = receiver.recv().await {
@@ -68,6 +80,6 @@ impl Client {
                     _ => {}
                 }
             }
-        });
+        })
     }
 }
