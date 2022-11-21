@@ -4,6 +4,7 @@ use tokio::task::JoinHandle;
 use std::collections::VecDeque;
 use std::time::Duration;
 
+use crate::entry::{LogEntry, StateMutation};
 use crate::message::{Message, MessageContent, ReplAction::*};
 use crate::node::Node;
 
@@ -86,7 +87,11 @@ pub async fn shutdown(senders: Vec<Sender<Message>>, threads: Vec<JoinHandle<()>
     }
 }
 
-pub async fn assert_vote(fake_receiver: &mut Receiver<Message>, fake_sender: &Sender<Message>) {
+pub async fn assert_vote(
+    fake_receiver: &mut Receiver<Message>,
+    fake_sender: &Sender<Message>,
+    id: usize,
+) {
     let message = fake_receiver.recv().await.unwrap();
     assert_eq!(
         message.content,
@@ -103,7 +108,7 @@ pub async fn assert_vote(fake_receiver: &mut Receiver<Message>, fake_sender: &Se
                 granted: true,
                 term: 1,
             },
-            from: 1,
+            from: id,
         })
         .await
         .expect("Send should not fail");
@@ -112,13 +117,28 @@ pub async fn assert_vote(fake_receiver: &mut Receiver<Message>, fake_sender: &Se
     assert_eq!(
         message.content,
         MessageContent::AppendEntries {
-            entries: Vec::new(),
+            entries: vec![LogEntry {
+                term: 1,
+                mutation: StateMutation::Noop,
+            }],
             prev_log_index: 0,
             prev_log_term: 0,
             leader_commit: 0,
             term: 1
         }
     );
+
+    fake_sender
+        .send(Message {
+            content: MessageContent::AppendResponse {
+                success: true,
+                term: 1,
+                match_index: 1,
+            },
+            from: id,
+        })
+        .await
+        .unwrap();
 }
 
 pub async fn assert_no_message(receiver: &mut Receiver<Message>) {
