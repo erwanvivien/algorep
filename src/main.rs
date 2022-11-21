@@ -81,6 +81,15 @@ async fn main() {
 
     tokio::time::sleep(CONFIG.election_timeout_range().1).await;
 
+    println!(
+        r"
+Welcome to our RAFT implementation!
+Please see the README for more information.
+You have two ways to interact with the system:
+1. Use the REPL <server_id> <command> [args]
+2. Use the <command> [args]"
+    );
+
     loop {
         let mut buffer = String::with_capacity(100);
         tokio::time::sleep(CONFIG.election_timeout_range().1 * 2).await;
