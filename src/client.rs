@@ -35,6 +35,7 @@ impl Client {
         let leader_id = Arc::new(AtomicUsize::new(rand::random::<usize>() % node_count));
         let receiver_handle = Client::start_receiver(receiver, leader_id.clone());
 
+        info!("Client {} created with random leader {}", id - node_count, leader_id.load(Relaxed));
         Self {
             id,
             senders,

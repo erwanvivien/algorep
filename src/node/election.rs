@@ -1,7 +1,7 @@
 use log::info;
 
 use super::role::{CandidateData, LeaderData, Role};
-use crate::message::MessageContent;
+use crate::{message::MessageContent, entry::StateMutation};
 
 use super::Node;
 
@@ -23,6 +23,8 @@ impl Node {
         self.role = Role::Leader(LeaderData::new(self.logs.len() + 1, self.node_count));
 
         self.leader_id = Some(self.id);
+        self.add_log(StateMutation::Noop);
+
         self.send_entries().await;
     }
 }

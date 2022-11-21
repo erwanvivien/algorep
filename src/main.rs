@@ -62,7 +62,6 @@ async fn main() {
             // Load state from disk
             let persistent_state = PersistentState::from_file(id);
             if let Some(persistent_state) = persistent_state {
-                dbg!(&persistent_state);
                 node.update_persistent(&persistent_state);
             }
 

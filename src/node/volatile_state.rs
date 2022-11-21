@@ -51,6 +51,7 @@ impl VolatileState {
                     file.text.push('\n');
                 }
             }
+            StateMutation::Noop => {}
         }
     }
 

@@ -43,7 +43,7 @@ pub async fn should_receive_election() {
     let (threads, senders, mut receivers) =
         setup_servers(1, Some(vec![Duration::from_millis(10)]), Fake::Server).await;
 
-    assert_vote(&mut receivers[0], &senders[0]).await;
+    assert_vote(&mut receivers[0], &senders[0], 1).await;
 
     shutdown(senders, threads).await
 }
@@ -129,7 +129,10 @@ pub async fn should_elect_first() {
     assert_eq!(
         message.content,
         MessageContent::AppendEntries {
-            entries: Vec::new(),
+            entries: vec![LogEntry {
+                term: 1,
+                mutation: StateMutation::Noop
+            },],
             prev_log_index: 0,
             prev_log_term: 0,
             leader_commit: 0,
@@ -182,7 +185,7 @@ pub async fn client_send_request() {
     let resp = client_receiver.recv().await.unwrap();
     assert_eq!(
         resp.content,
-        MessageContent::ClientResponse(Ok(ClientResponse::Uid("1-1".to_string())))
+        MessageContent::ClientResponse(Ok(ClientResponse::Uid("1-2".to_string())))
     );
 
     assert_no_message(client_receiver).await;
@@ -201,7 +204,7 @@ pub async fn client_server_should_receive_entry() {
     let mut server_receiver = receivers.pop_front().unwrap();
     let mut client_receiver = receivers.pop_front().unwrap();
 
-    assert_vote(&mut server_receiver, &senders[0]).await;
+    assert_vote(&mut server_receiver, &senders[0], 2).await;
 
     let leader = &senders[0];
     leader
@@ -217,7 +220,7 @@ pub async fn client_server_should_receive_entry() {
     let resp = client_receiver.recv().await.unwrap();
     assert_eq!(
         resp.content,
-        MessageContent::ClientResponse(Ok(ClientResponse::Uid("1-1".to_string())))
+        MessageContent::ClientResponse(Ok(ClientResponse::Uid("1-2".to_string())))
     );
 
     let resp = server_receiver.recv().await.unwrap();
@@ -225,13 +228,13 @@ pub async fn client_server_should_receive_entry() {
         entries: vec![LogEntry {
             term: 1,
             mutation: StateMutation::Create {
-                uid: "1-1".to_string(),
+                uid: "1-2".to_string(),
                 filename: "my_file".to_string(),
             },
         }],
-        prev_log_index: 0,
-        prev_log_term: 0,
-        leader_commit: 0,
+        prev_log_index: 1,
+        prev_log_term: 1,
+        leader_commit: 1,
         term: 1,
     };
     assert_eq!(resp.content, expected_content);
@@ -240,7 +243,7 @@ pub async fn client_server_should_receive_entry() {
         .send(Message {
             content: MessageContent::AppendResponse {
                 success: true,
-                match_index: 1,
+                match_index: 2,
                 term: 1,
             },
             from: 2,
@@ -251,9 +254,9 @@ pub async fn client_server_should_receive_entry() {
     let resp = server_receiver.recv().await.unwrap();
     let expected_content = MessageContent::AppendEntries {
         entries: vec![],
-        prev_log_index: 1,
+        prev_log_index: 2,
         prev_log_term: 1,
-        leader_commit: 1,
+        leader_commit: 2,
         term: 1,
     };
     assert_eq!(resp.content, expected_content);
@@ -421,7 +424,10 @@ pub async fn should_handle_append_entries() {
     assert_eq!(
         message.content,
         MessageContent::AppendEntries {
-            entries: Vec::new(),
+            entries: vec![LogEntry {
+                mutation: StateMutation::Noop,
+                term: 2
+            }],
             prev_log_index: previous_count,
             prev_log_term: 1,
             leader_commit: previous_count,
