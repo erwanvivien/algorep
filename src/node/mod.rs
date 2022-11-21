@@ -160,8 +160,7 @@ impl Node {
                         leader_commit: self.state.commit_index,
                         term: self.current_term,
                     },
-                )
-                .await;
+                );
             }
         } else {
             unreachable!();
@@ -179,8 +178,7 @@ impl Node {
             for waiter in waiters {
                 let resp = Err(ClientResponseError::WrongLeader(leader_id));
 
-                self.emit(waiter.client_id, MessageContent::ClientResponse(resp))
-                    .await;
+                self.emit(waiter.client_id, MessageContent::ClientResponse(resp));
             }
         }
 

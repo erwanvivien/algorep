@@ -32,8 +32,7 @@ impl Node {
                     self.emit(
                         from,
                         MessageContent::ClientResponse(Ok(ClientResponse::List(files))),
-                    )
-                    .await;
+                    );
                 }
                 ClientCommand::Delete { uid } => {
                     leader.waiters.push_back(Waiter {
@@ -66,7 +65,6 @@ impl Node {
                             Err(ClientResponseError::FileNotFound)
                         }),
                     )
-                    .await
                 }
             }
         } else {
@@ -76,8 +74,7 @@ impl Node {
                 MessageContent::ClientResponse(Err(ClientResponseError::WrongLeader(
                     self.leader_id,
                 ))),
-            )
-            .await;
+            );
         }
     }
 
@@ -107,8 +104,7 @@ impl Node {
                     self.id,
                     waiter.client_id - self.node_count
                 );
-                self.emit(waiter.client_id, MessageContent::ClientResponse(resp))
-                    .await;
+                self.emit(waiter.client_id, MessageContent::ClientResponse(resp));
             }
         }
     }

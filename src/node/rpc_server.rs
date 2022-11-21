@@ -30,8 +30,7 @@ impl Node {
                         granted,
                         term: self.current_term,
                     },
-                )
-                .await;
+                );
                 granted
             }
             MessageContent::VoteResponse { granted, term } => {
@@ -89,8 +88,7 @@ impl Node {
                         match_index: self.logs.len(),
                         term: self.current_term,
                     },
-                )
-                .await;
+                );
 
                 success
             }
