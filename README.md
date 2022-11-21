@@ -36,6 +36,8 @@ You can act as a client by using the following commands:
   - `DELETE <UID>`: Delete the key-value pair associated with the key
   - `APPEND <key> [message]`: Append the `message` to the content of the file in the store with a new line
 
+**Note**: The client does not automaticaly retry to send a message if it fails. You need to resend the message manually. This is the design we chose for the client.
+
 ## Running the tests
 
 To run the tests, you need to have `cargo` installed. \
