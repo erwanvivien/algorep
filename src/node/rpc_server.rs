@@ -70,17 +70,20 @@ impl Node {
 
                 let success = same_term && same_logs;
                 if success {
-                    self.logs.truncate(prev_log_index);
-                    self.logs.extend(entries);
+                    let should_mutate = prev_log_index < self.logs.len() || !entries.is_empty();
+                    if should_mutate {
+                        self.logs.truncate(prev_log_index);
+                        self.logs.extend(entries);
+
+                        // If we fail to write to disk, do not respond to leader
+                        if PersistentState::save(self).is_err() {
+                            return true;
+                        };
+                    }
 
                     if leader_commit > self.state.commit_index {
                         self.state.commit_index = min(leader_commit, self.logs.len());
                     }
-
-                    // If we fail to write to disk, do not respond to leader
-                    if PersistentState::save(self).is_err() {
-                        return true;
-                    };
                 }
 
                 self.emit(
