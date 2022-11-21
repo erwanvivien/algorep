@@ -7,86 +7,46 @@ use regex::Regex;
 
 use crate::{entry::LogEntry, node::volatile_state::File, node::NodeId};
 
-#[derive(Debug, Copy, PartialEq, Eq, Clone)]
-pub enum Speed {
-    Fast,
-    Medium,
-    Slow,
-}
-
-impl Display for Speed {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Speed::Fast => write!(f, "Fast"),
-            Speed::Medium => write!(f, "Medium"),
-            Speed::Slow => write!(f, "Slow"),
-        }
-    }
-}
-
-impl From<Speed> for Duration {
-    fn from(speed: Speed) -> Self {
-        match speed {
-            Speed::Fast => Duration::from_millis(0),
-            Speed::Medium => Duration::from_millis(100),
-            Speed::Slow => Duration::from_millis(1000),
-        }
-    }
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct Message {
+    pub content: MessageContent,
+    pub from: NodeId,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub enum ReplAction {
-    Speed(Speed),
-    Crash,
-    Start,
-    Shutdown,
-    Recovery,
-    Timeout,
+pub enum MessageContent {
+    // Election
+    VoteRequest {
+        last_log_index: usize,
+        last_log_term: usize,
+        term: usize,
+    },
+    VoteResponse {
+        granted: bool,
+        term: usize,
+    },
 
-    // Personnal commands
-    Display,
-}
+    // Log replication
+    AppendEntries {
+        entries: Vec<LogEntry>,
+        // leader_id: NodeId,
+        prev_log_index: usize,
+        prev_log_term: usize,
+        leader_commit: usize,
+        term: usize,
+    },
+    AppendResponse {
+        success: bool,
+        match_index: usize,
+        term: usize,
+    },
 
-impl ReplAction {
-    pub fn parse_action(action: &str) -> Option<(NodeId, ReplAction)> {
-        let action = action.to_lowercase();
+    // Client actions
+    ClientRequest(ClientCommand),
+    ClientResponse(Result<ClientResponse, ClientResponseError>),
 
-        let repl_id = Regex::new(r"^repl (?P<id>\d+)").unwrap();
-        if !repl_id.is_match(&action) {
-            return None;
-        }
-
-        let id_capture = repl_id.captures(&action)?;
-        let id = id_capture.name("id")?.as_str().parse::<NodeId>().ok()?;
-
-        let speed_re = Regex::new(r"speed (?P<speed>\w+)").unwrap();
-        if let Some(caps) = speed_re.captures(&action) {
-            let speed = caps.name("speed")?.as_str();
-
-            let speed = match speed {
-                "fast" => Some(Speed::Fast),
-                "medium" => Some(Speed::Medium),
-                "slow" => Some(Speed::Slow),
-                _ => return None,
-            };
-
-            speed.map(|fast| (id, ReplAction::Speed(fast)))
-        } else if action.contains("crash") {
-            Some((id, ReplAction::Crash))
-        } else if action.contains("start") {
-            Some((id, ReplAction::Start))
-        } else if action.contains("shutdown") {
-            Some((id, ReplAction::Shutdown))
-        } else if action.contains("recovery") {
-            Some((id, ReplAction::Recovery))
-        } else if action.contains("timeout") {
-            Some((id, ReplAction::Timeout))
-        } else if action.contains("display") {
-            Some((id, ReplAction::Display))
-        } else {
-            None
-        }
-    }
+    // External action
+    Repl(ReplAction),
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Clone)]
@@ -96,6 +56,21 @@ pub enum ClientCommand {
     Delete { uid: String },
     Append { uid: String, text: String },
     Get { uid: String },
+}
+
+#[derive(Debug, Eq, PartialEq, PartialOrd, Clone)]
+pub enum ClientResponse {
+    Ok,
+    Uid(String),
+    List(Vec<String>),
+    File(File),
+}
+
+#[derive(Debug, PartialEq, Eq, PartialOrd, Clone)]
+pub enum ClientResponseError {
+    EntryOverridden,
+    FileNotFound,
+    WrongLeader(Option<NodeId>),
 }
 
 impl ClientCommand {
@@ -150,57 +125,84 @@ impl ClientCommand {
     }
 }
 
-#[derive(Debug, Eq, PartialEq, PartialOrd, Clone)]
-pub enum ClientResponse {
-    Ok,
-    Uid(String),
-    List(Vec<String>),
-    File(File),
-}
-
-#[derive(Debug, PartialEq, Eq, PartialOrd, Clone)]
-pub enum ClientResponseError {
-    EntryOverridden,
-    FileNotFound,
-    WrongLeader(Option<NodeId>),
-}
-
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub enum MessageContent {
-    // Election
-    VoteRequest {
-        last_log_index: usize,
-        last_log_term: usize,
-        term: usize,
-    },
-    VoteResponse {
-        granted: bool,
-        term: usize,
-    },
-    // Log replication
-    AppendEntries {
-        entries: Vec<LogEntry>,
-        // leader_id: NodeId,
-        prev_log_index: usize,
-        prev_log_term: usize,
-        leader_commit: usize,
-        term: usize,
-    },
-    AppendResponse {
-        success: bool,
-        match_index: usize,
-        term: usize,
-    },
+pub enum ReplAction {
+    Speed(Speed),
+    Crash,
+    Start,
+    Recovery,
 
-    // External action
-    #[allow(dead_code)]
-    Repl(ReplAction),
-    ClientRequest(ClientCommand),
-    ClientResponse(Result<ClientResponse, ClientResponseError>),
+    // Personnal commands
+    Shutdown,
+    Timeout,
+    Display,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct Message {
-    pub content: MessageContent,
-    pub from: NodeId,
+impl ReplAction {
+    pub fn parse_action(action: &str) -> Option<(NodeId, ReplAction)> {
+        let action = action.to_lowercase();
+
+        let repl_id = Regex::new(r"^repl (?P<id>\d+)").unwrap();
+        if !repl_id.is_match(&action) {
+            return None;
+        }
+
+        let id_capture = repl_id.captures(&action)?;
+        let id = id_capture.name("id")?.as_str().parse::<NodeId>().ok()?;
+
+        let speed_re = Regex::new(r"speed (?P<speed>\w+)").unwrap();
+        if let Some(caps) = speed_re.captures(&action) {
+            let speed = caps.name("speed")?.as_str();
+
+            let speed = match speed {
+                "fast" => Some(Speed::Fast),
+                "medium" => Some(Speed::Medium),
+                "slow" => Some(Speed::Slow),
+                _ => return None,
+            };
+
+            speed.map(|fast| (id, ReplAction::Speed(fast)))
+        } else if action.contains("crash") {
+            Some((id, ReplAction::Crash))
+        } else if action.contains("start") {
+            Some((id, ReplAction::Start))
+        } else if action.contains("shutdown") {
+            Some((id, ReplAction::Shutdown))
+        } else if action.contains("recovery") {
+            Some((id, ReplAction::Recovery))
+        } else if action.contains("timeout") {
+            Some((id, ReplAction::Timeout))
+        } else if action.contains("display") {
+            Some((id, ReplAction::Display))
+        } else {
+            None
+        }
+    }
+}
+
+#[derive(Debug, Copy, PartialEq, Eq, Clone)]
+pub enum Speed {
+    Fast,
+    Medium,
+    Slow,
+}
+
+impl Display for Speed {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Speed::Fast => write!(f, "Fast"),
+            Speed::Medium => write!(f, "Medium"),
+            Speed::Slow => write!(f, "Slow"),
+        }
+    }
+}
+
+impl From<Speed> for Duration {
+    fn from(speed: Speed) -> Self {
+        match speed {
+            Speed::Fast => Duration::from_millis(0),
+            Speed::Medium => Duration::from_millis(100),
+            Speed::Slow => Duration::from_millis(1000),
+        }
+    }
 }

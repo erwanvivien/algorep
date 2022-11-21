@@ -35,10 +35,17 @@ impl Node {
             ReplAction::Crash => {
                 info!("Server {} is crashed, ignoring messages", self.id);
                 self.simulate_crash = true;
+
+                self.state = VolatileState::new();
+                self.logs.clear();
+                self.current_term = 0;
+                self.leader_id = None;
+                self.voted_for = None;
             }
             ReplAction::Start => {
-                info!("Server {} is up, resuming message reception", self.id);
-                self.simulate_crash = false;
+                info!("Starting clients");
+                // We are playing the role of clients, so we need do not need to
+                // start the clients.
             }
             ReplAction::Shutdown => {
                 info!("Server {} is shuting down", self.id);
@@ -62,11 +69,12 @@ impl Node {
                         self.id
                     );
 
+                    self.simulate_crash = false;
+
                     self.role = Role::Follower;
                     self.update_persistent(&state);
 
                     self.leader_id = None;
-                    self.state = VolatileState::new();
 
                     self.display();
                 }

@@ -130,7 +130,7 @@ impl Node {
                         }
                     } else {
                         leader.next_index[from] -= 1;
-                        // IMPROVE: Send again immediately to improve performance
+                        // IMPROVE: Send AppendEntries again immediately to improve performance
                     }
                     true
                 } else {

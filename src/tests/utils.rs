@@ -4,6 +4,7 @@ use tokio::task::JoinHandle;
 use std::collections::VecDeque;
 use std::time::Duration;
 
+use crate::config::CONFIG;
 use crate::entry::{LogEntry, StateMutation};
 use crate::message::{Message, MessageContent, ReplAction::*};
 use crate::node::Node;
@@ -39,7 +40,7 @@ pub async fn setup_servers(
     let mut receivers = VecDeque::with_capacity(channels_count);
 
     for _ in 0..channels_count {
-        let (sender, receiver) = mpsc::channel::<Message>(4096);
+        let (sender, receiver) = mpsc::channel::<Message>(CONFIG.channel_capacity);
 
         senders.push(sender);
         receivers.push_back(receiver);
