@@ -123,7 +123,10 @@ impl Node {
                             leader.match_index[self.id] = match_index;
                             leader.next_index[self.id] = match_index + 1;
 
-                            self.state.commit_index = new_commit_index;
+                            // Save to disk, and update commit index
+                            if let Ok(_) = PersistentState::save(self) {
+                                self.state.commit_index = new_commit_index;
+                            }
                         }
                     } else {
                         leader.next_index[from] -= 1;
